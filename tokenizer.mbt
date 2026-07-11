@@ -2,7 +2,7 @@
 pub fn eof() -> Parser[Unit] {
   Parser::new(input => {
     if input.is_eof() {
-      Ok((), input)
+      Ok(((), input))
     } else {
       Err(ParseError::new(input, "end of input"))
     }
@@ -15,7 +15,7 @@ pub fn satisfy(name : String, predicate : (Char) -> Bool) -> Parser[Char] {
     match input.peek() {
       Some(ch) =>
         if predicate(ch) {
-          Ok(ch, input.advance(ch))
+          Ok((ch, input.advance(ch)))
         } else {
           Err(ParseError::new(input, name))
         }
@@ -43,7 +43,7 @@ pub fn none_of(chars : String) -> Parser[Char] {
 pub fn string(expected : String) -> Parser[String] {
   Parser::new(input => {
     if input.remaining().has_prefix(expected.to_string_view()) {
-      Ok(expected, input.advance_string(expected))
+      Ok((expected, input.advance_string(expected)))
     } else {
       Err(ParseError::new(input, "\"" + expected + "\""))
     }
@@ -67,7 +67,7 @@ pub fn take_while(name : String, predicate : (Char) -> Bool) -> Parser[String] {
     if chars.length() == 0 {
       Err(ParseError::new(input, name))
     } else {
-      Ok(String::from_array(chars), rest)
+      Ok((String::from_array(chars), rest))
     }
   })
 }

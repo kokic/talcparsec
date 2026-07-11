@@ -15,7 +15,10 @@ fn atom_parser() -> Parser[Sexp] {
 ///|
 fn sexp_parser() -> Parser[Sexp] {
   atom_parser().or(
-    delay(sexp_parser).many().between(symbol("("), symbol(")")).map(Form),
+    delay(sexp_parser)
+    .many()
+    .between(symbol("("), symbol(")"))
+    .map(items => Form(items)),
   )
 }
 

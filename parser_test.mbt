@@ -66,7 +66,7 @@ test "take_while consumes contiguous matching input" {
   let parser = take_while("letters", Char::is_ascii_alphabetic)
   @test.assert_eq(
     parser.parse_partial("abc123"),
-    Ok("abc", Input::new("abc123").advance_string("abc")),
+    Ok(("abc", Input::new("abc123").advance_string("abc"))),
   )
   match parser.parse_partial("123") {
     Err(error) => {

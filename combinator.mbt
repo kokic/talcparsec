@@ -5,15 +5,14 @@ pub fn[T, U] Parser::bind(
 ) -> Parser[U] {
   Parser::new(input => {
     match self.run(input) {
-      Ok(value, rest) =>
+      Ok((value, rest)) =>
         match next(value).run(rest) {
-          Ok(out, end) => Ok(out, end)
+          Ok((out, end)) => Ok((out, end))
           Err(error) =>
             Err(
-              if rest.offset != input.offset {
+              {
+                guard rest.offset != input.offset else { error }
                 error.with_commit()
-              } else {
-                error
               },
             )
         }
@@ -41,13 +40,13 @@ pub fn[T, U] Parser::skip(self : Parser[T], next : Parser[U]) -> Parser[T] {
 pub fn[T] Parser::or(self : Parser[T], other : Parser[T]) -> Parser[T] {
   Parser::new(input => {
     match self.run(input) {
-      Ok(value, rest) => Ok(value, rest)
+      Ok((value, rest)) => Ok((value, rest))
       Err(first) =>
         if first.committed {
           Err(first)
         } else {
           match other.run(input) {
-            Ok(value, rest) => Ok(value, rest)
+            Ok((value, rest)) => Ok((value, rest))
             Err(second) => Err(first.merge(second))
           }
         }
@@ -59,7 +58,7 @@ pub fn[T] Parser::or(self : Parser[T], other : Parser[T]) -> Parser[T] {
 pub fn[T] Parser::attempt(self : Parser[T]) -> Parser[T] {
   Parser::new(input => {
     match self.run(input) {
-      Ok(value, rest) => Ok(value, rest)
+      Ok((value, rest)) => Ok((value, rest))
       Err(error) => Err(error.without_commit())
     }
   })
@@ -69,7 +68,7 @@ pub fn[T] Parser::attempt(self : Parser[T]) -> Parser[T] {
 pub fn[T] Parser::optional(self : Parser[T]) -> Parser[T?] {
   Parser::new(input => {
     match self.run(input) {
-      Ok(value, rest) => Ok(Some(value), rest)
+      Ok((value, rest)) => Ok((Some(value), rest))
       Err(error) => error.reject_if_committed(None, input)
     }
   })
@@ -81,7 +80,7 @@ pub fn[T] Parser::many(self : Parser[T]) -> Parser[Array[T]] {
     let values = Array::new()
     for rest = input {
       match self.run(rest) {
-        Ok(value, next) =>
+        Ok((value, next)) =>
           if next.offset == rest.offset {
             break Err(
               ParseError::message(rest, "many parser accepted empty input"),
@@ -131,7 +130,7 @@ pub fn[T, S] Parser::sep_by1(
 pub fn[T] Parser::label(self : Parser[T], expected : String) -> Parser[T] {
   Parser::new(input => {
     match self.run(input) {
-      Ok(value, rest) => Ok(value, rest)
+      Ok((value, rest)) => Ok((value, rest))
       Err(error) =>
         if error.offset == input.offset {
           Err(ParseError::new(input, expected))

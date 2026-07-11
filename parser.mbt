@@ -1,15 +1,20 @@
 ///|
 pub(all) struct Parser[T] {
-  parse_fn : (Input) -> ParseResult[T]
+  parse_fn : (Input) -> Result[(T, Input), ParseError]
 }
 
 ///|
-pub fn[T] Parser::new(parse_fn : (Input) -> ParseResult[T]) -> Parser[T] {
+pub fn[T] Parser::new(
+  parse_fn : (Input) -> Result[(T, Input), ParseError],
+) -> Parser[T] {
   { parse_fn, }
 }
 
 ///|
-pub fn[T] Parser::run(self : Parser[T], input : Input) -> ParseResult[T] {
+pub fn[T] Parser::run(
+  self : Parser[T],
+  input : Input,
+) -> Result[(T, Input), ParseError] {
   (self.parse_fn)(input)
 }
 
@@ -19,7 +24,7 @@ pub fn[T] Parser::parse(
   source : String,
 ) -> Result[T, ParseError] {
   match self.run(Input::new(source)) {
-    Ok(value, input) =>
+    Ok((value, input)) =>
       if input.is_eof() {
         Ok(value)
       } else {
@@ -33,13 +38,13 @@ pub fn[T] Parser::parse(
 pub fn[T] Parser::parse_partial(
   self : Parser[T],
   source : String,
-) -> ParseResult[T] {
+) -> Result[(T, Input), ParseError] {
   self.run(Input::new(source))
 }
 
 ///|
 pub fn[T] pure(value : T) -> Parser[T] {
-  Parser::new(input => Ok(value, input))
+  Parser::new(input => Ok((value, input)))
 }
 
 ///|

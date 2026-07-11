@@ -15,8 +15,8 @@ pub fn[T] ParseError::reject_if_committed(
   self : ParseError,
   value : T,
   rest : Input,
-) -> ParseResult[T] {
-  guard self.committed else { Ok(value, rest) }
+) -> Result[(T, Input), ParseError] {
+  guard self.committed else { Ok((value, rest)) }
   Err(self)
 }
 
