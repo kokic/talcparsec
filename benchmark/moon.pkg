@@ -1,0 +1,4 @@
+import {
+  "kokic/talcparsec" @parsec,
+  "moonbitlang/core/bench",
+} for "test"
