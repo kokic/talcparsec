@@ -24,12 +24,10 @@ pub fn[T] Parser::parse(
   source : String,
 ) -> Result[T, ParseError] {
   match self.run(Input::new(source)) {
-    Ok((value, input)) =>
-      if input.is_eof() {
-        Ok(value)
-      } else {
-        Err(ParseError::new(input, "end of input"))
-      }
+    Ok((value, input)) => {
+      guard !input.is_eof() else { Ok(value) }
+      Err(ParseError::new(input, "end of input"))
+    }
     Err(error) => Err(error)
   }
 }

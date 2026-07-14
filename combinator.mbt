@@ -4,20 +4,17 @@ pub fn[T, U] Parser::bind(
   next : (T) -> Parser[U],
 ) -> Parser[U] {
   Parser::new(input => {
-    match self.run(input) {
-      Ok((value, rest)) =>
-        match next(value).run(rest) {
-          Ok((out, end)) => Ok((out, end))
-          Err(error) =>
-            Err(
-              {
-                guard rest.offset != input.offset else { error }
-                error.with_commit()
-              },
-            )
-        }
-      Err(error) => Err(error)
-    }
+    self
+    .run(input)
+    .bind(result => {
+      let (value, rest) = result
+      next(value)
+      .run(rest)
+      .map_err(error => {
+        guard rest.offset != input.offset else { error }
+        error.with_commit()
+      })
+    })
   })
 }
 
@@ -45,10 +42,7 @@ pub fn[T] Parser::or(self : Parser[T], other : Parser[T]) -> Parser[T] {
         if first.committed {
           Err(first)
         } else {
-          match other.run(input) {
-            Ok((value, rest)) => Ok((value, rest))
-            Err(second) => Err(first.merge(second))
-          }
+          other.run(input).map_err(second => first.merge(second))
         }
     }
   })
@@ -56,12 +50,7 @@ pub fn[T] Parser::or(self : Parser[T], other : Parser[T]) -> Parser[T] {
 
 ///|
 pub fn[T] Parser::attempt(self : Parser[T]) -> Parser[T] {
-  Parser::new(input => {
-    match self.run(input) {
-      Ok((value, rest)) => Ok((value, rest))
-      Err(error) => Err(error.without_commit())
-    }
-  })
+  Parser::new(input => self.run(input).map_err(error => error.without_commit()))
 }
 
 ///|
@@ -129,15 +118,12 @@ pub fn[T, S] Parser::sep_by1(
 ///|
 pub fn[T] Parser::label(self : Parser[T], expected : String) -> Parser[T] {
   Parser::new(input => {
-    match self.run(input) {
-      Ok((value, rest)) => Ok((value, rest))
-      Err(error) =>
-        if error.offset == input.offset {
-          Err(ParseError::new(input, expected))
-        } else {
-          Err(error)
-        }
-    }
+    self
+    .run(input)
+    .map_err(error => {
+      guard error.offset == input.offset else { error }
+      ParseError::new(input, expected)
+    })
   })
 }
 
