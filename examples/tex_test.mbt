@@ -76,9 +76,7 @@ fn tex_command_parser() -> @talcparsec.Parser[TexNode] {
     .then(tex_command_arg().many())
     .map(args => {
       let values = Array::new(capacity=args.length() * 4)
-      for arg in args {
-        values.append(arg)
-      }
+      args.each(arg => values.append(arg))
       Command(name, values)
     })
   })
@@ -168,25 +166,44 @@ test "parse TeX-like document" {
     #|\section{Intro}
     #|Hello \emph{MoonBit}!
     #|
-    #|$$ x+y $$ 
+    #|$$ x + \sqrt2 y + \sqrt[3] 3 $$ 
     #|
     #|\{ok\}.
-  debug_inspect(tex_document_parser().parse(source), content=(
-    #|Ok(
-    #|  [
-    #|    Command("section", [Text("Intro")]),
-    #|    Text("\nHello "),
-    #|    Command("emph", [Text("MoonBit")]),
-    #|    Text("!\n\n"),
-    #|    DisplayMath(" x+y "),
-    #|    Text(" \n\n"),
-    #|    Text("{"),
-    #|    Text("ok"),
-    #|    Text("}"),
-    #|    Text("."),
-    #|  ],
-    #|)
-  ))
+    #|
+    #|\begin{center}
+    #|  \begin{lemma}
+    #|    Hello
+    #|  \end{lemma}
+    #|\end{center}
+  debug_inspect(
+    tex_document_parser().parse(source),
+    content=(
+      #|Ok(
+      #|  [
+      #|    Command("section", [Text("Intro")]),
+      #|    Text("\nHello "),
+      #|    Command("emph", [Text("MoonBit")]),
+      #|    Text("!\n\n"),
+      #|    DisplayMath(" x + \\sqrt2 y + \\sqrt[3] 3 "),
+      #|    Text(" \n\n"),
+      #|    Text("{"),
+      #|    Text("ok"),
+      #|    Text("}"),
+      #|    Text(".\n\n"),
+      #|    Environment(
+      #|      "center",
+      #|      [
+      #|        Text("\n  "),
+      #|        Environment("lemma", [Text("\n    Hello\n  ")]),
+      #|        Text("\n"),
+      #|      ],
+      #|    ),
+      #|  ],
+      #|)
+
+
+    ),
+  )
 }
 
 ///|
