@@ -176,16 +176,12 @@ fn tex_math_arg() -> @talcparsec.Parser[Array[TexNode]] {
 
 ///|
 fn tex_superscript_parser() -> @talcparsec.Parser[TexNode] {
-  @talcparsec.char('^')
-  .then(tex_math_arg())
-  .map(nodes => Superscript(nodes))
+  @talcparsec.char('^').then(tex_math_arg()).map(nodes => Superscript(nodes))
 }
 
 ///|
 fn tex_subscript_parser() -> @talcparsec.Parser[TexNode] {
-  @talcparsec.char('_')
-  .then(tex_math_arg())
-  .map(nodes => Subscript(nodes))
+  @talcparsec.char('_').then(tex_math_arg()).map(nodes => Subscript(nodes))
 }
 
 ///|
