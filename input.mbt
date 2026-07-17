@@ -46,14 +46,14 @@ pub fn Input::peek(self : Input) -> Char? {
 ///|
 pub fn Input::advance(self : Input, ch : Char) -> Input {
   if ch == '\n' {
-    {
+    Input::{
       source: self.source,
       offset: self.offset + ch.utf16_len(),
       line: self.line + 1,
       column: 1,
     }
   } else {
-    {
+    Input::{
       source: self.source,
       offset: self.offset + ch.utf16_len(),
       line: self.line,

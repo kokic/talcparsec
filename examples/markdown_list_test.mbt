@@ -8,6 +8,14 @@ enum Token {
 } derive(Eq, Debug)
 
 ///|
+suberror LayoutError {
+  InconsistentIndentation
+  ExpectedListMarker
+  ExpectedListItemText
+  ExpectedToken(expected~ : String, offset~ : Int)
+} derive(Eq, Debug)
+
+///|
 struct TokenInput {
   tokens : Array[Token]
   offset : Int
@@ -29,7 +37,7 @@ enum ListItem {
 } derive(Eq, Debug)
 
 ///|
-fn tokenize_markdown_list(source : String) -> Result[Array[Token], String] {
+fn tokenize_markdown_list(source : String) -> Array[Token] raise LayoutError {
   let tokens = Array::new()
   let indents = [0]
   for raw_line in source.split("\n") {
@@ -48,14 +56,12 @@ fn tokenize_markdown_list(source : String) -> Result[Array[Token], String] {
         current_indentation = indents.last().unwrap()
       }
       guard indentation == current_indentation else {
-        return Err("inconsistent indentation")
+        raise InconsistentIndentation
       }
     }
-    guard content.has_prefix("- ") else {
-      return Err("expected an unordered-list marker")
-    }
+    guard content.has_prefix("- ") else { raise ExpectedListMarker }
     let text = content.sub(start=2).to_owned()
-    guard !text.is_empty() else { return Err("expected list-item text") }
+    guard !text.is_empty() else { raise ExpectedListItemText }
     tokens.push(Bullet)
     tokens.push(ListText(text))
     tokens.push(Newline)
@@ -64,105 +70,83 @@ fn tokenize_markdown_list(source : String) -> Result[Array[Token], String] {
     ignore(indents.pop())
     tokens.push(Dedent)
   }
-  Ok(tokens)
+  tokens
 }
 
 ///|
-fn token_error(input : TokenInput, expected : String) -> String {
-  "expected " + expected + " at token " + input.offset.to_string()
+fn[T] token_error(input : TokenInput, expected : String) -> T raise LayoutError {
+  raise ExpectedToken(expected~, offset=input.offset)
 }
 
 ///|
 fn parse_list_items(
   input : TokenInput,
-) -> Result[(Array[ListItem], TokenInput), String] {
+) -> (Array[ListItem], TokenInput) raise LayoutError {
   let items = Array::new()
   let mut rest = input
   while rest.peek() is Some(Bullet) {
-    match parse_list_item(rest) {
-      Ok((item, next)) => {
-        items.push(item)
-        rest = next
-      }
-      Err(error) => return Err(error)
-    }
+    let (item, next) = parse_list_item(rest)
+    items.push(item)
+    rest = next
   }
-  guard !items.is_empty() else { return Err(token_error(input, "list item")) }
-  Ok((items, rest))
+  guard !items.is_empty() else { token_error(input, "list item") }
+  (items, rest)
 }
 
 ///|
 fn parse_list_item(
   input : TokenInput,
-) -> Result[(ListItem, TokenInput), String] {
-  let rest = match input.peek() {
-    Some(Bullet) => input.advance()
-    _ => return Err(token_error(input, "'-'"))
-  }
-  let text = match rest.peek() {
-    Some(ListText(text)) => text
-    _ => return Err(token_error(rest, "list-item text"))
+) -> (ListItem, TokenInput) raise LayoutError {
+  guard input.peek() is Some(Bullet) else { token_error(input, "'-'") }
+  let rest = input.advance()
+  guard rest.peek() is Some(ListText(text)) else {
+    token_error(rest, "list-item text")
   }
   let rest = rest.advance()
-  let rest = match rest.peek() {
-    Some(Newline) => rest.advance()
-    _ => return Err(token_error(rest, "newline"))
-  }
+  guard rest.peek() is Some(Newline) else { token_error(rest, "newline") }
+  let rest = rest.advance()
   let (children, rest) = match rest.peek() {
-    Some(Indent) =>
-      match parse_list_items(rest.advance()) {
-        Ok((items, after_children)) =>
-          match after_children.peek() {
-            Some(Dedent) => (items, after_children.advance())
-            _ => return Err(token_error(after_children, "dedent"))
-          }
-        Err(error) => return Err(error)
+    Some(Indent) => {
+      let (items, after_children) = parse_list_items(rest.advance())
+      guard after_children.peek() is Some(Dedent) else {
+        token_error(after_children, "dedent")
       }
+      (items, after_children.advance())
+    }
     _ => ([], rest)
   }
-  Ok((Item(text, children), rest))
+  (Item(text, children), rest)
 }
 
 ///|
 fn parse_markdown_list(
   tokens : Array[Token],
-) -> Result[Array[ListItem], String] {
+) -> Array[ListItem] raise LayoutError {
   let input = { tokens, offset: 0 }
-  match parse_list_items(input) {
-    Ok((items, rest)) =>
-      if rest.peek() is None {
-        Ok(items)
-      } else {
-        Err(token_error(rest, "end of token stream"))
-      }
-    Err(error) => Err(error)
-  }
+  let (items, rest) = parse_list_items(input)
+  guard rest.peek() is None else { token_error(rest, "end of token stream") }
+  items
 }
 
 ///|
 test "lex Markdown list indentation into virtual tokens" {
-  @test.assert_eq(
-    tokenize_markdown_list(
-      (
-        #|- groceries
-        #|  - fruit
-        #|- chores
-      ),
-    ),
-    Ok([
-      Bullet,
-      ListText("groceries"),
-      Newline,
-      Indent,
-      Bullet,
-      ListText("fruit"),
-      Newline,
-      Dedent,
-      Bullet,
-      ListText("chores"),
-      Newline,
-    ]),
-  )
+  let source =
+    #|- groceries
+    #|  - fruit
+    #|- chores
+  @test.assert_eq(tokenize_markdown_list(source), [
+    Bullet,
+    ListText("groceries"),
+    Newline,
+    Indent,
+    Bullet,
+    ListText("fruit"),
+    Newline,
+    Dedent,
+    Bullet,
+    ListText("chores"),
+    Newline,
+  ])
 }
 
 ///|
@@ -175,15 +159,11 @@ test "parse nested Markdown unordered list from tokens" {
     #|  - vegetables
     #|- chores
     #|  - laundry
-  let result = tokenize_markdown_list(source).bind(parse_markdown_list)
-  @test.assert_eq(
-    result,
-    Ok([
-      Item("groceries", [
-        Item("fruit", [Item("apples", []), Item("pears", [])]),
-        Item("vegetables", []),
-      ]),
-      Item("chores", [Item("laundry", [])]),
+  @test.assert_eq(parse_markdown_list(tokenize_markdown_list(source)), [
+    Item("groceries", [
+      Item("fruit", [Item("apples", []), Item("pears", [])]),
+      Item("vegetables", []),
     ]),
-  )
+    Item("chores", [Item("laundry", [])]),
+  ])
 }
