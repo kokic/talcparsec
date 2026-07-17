@@ -11,21 +11,22 @@ pub(all) struct ParseError {
 } derive(Eq, Debug)
 
 ///|
-pub fn[T] ParseError::reject_if_committed(
+pub fn[I, T] ParseError::reject_if_committed(
   self : ParseError,
   value : T,
-  rest : Input,
-) -> Result[(T, Input), ParseError] {
+  rest : I,
+) -> Result[(T, I), ParseError] {
   guard self.committed else { Ok((value, rest)) }
   Err(self)
 }
 
 ///|
-pub fn ParseError::new(input : Input, expected : String) -> ParseError {
+pub fn[I : Cursor] ParseError::new(input : I, expected : String) -> ParseError {
+  let position = input.position()
   {
-    offset: input.offset,
-    line: input.line,
-    column: input.column,
+    offset: position.offset,
+    line: position.line,
+    column: position.column,
     expected: [expected],
     message: "",
     committed: false,
@@ -33,11 +34,15 @@ pub fn ParseError::new(input : Input, expected : String) -> ParseError {
 }
 
 ///|
-pub fn ParseError::message(input : Input, message : String) -> ParseError {
+pub fn[I : Cursor] ParseError::message(
+  input : I,
+  message : String,
+) -> ParseError {
+  let position = input.position()
   {
-    offset: input.offset,
-    line: input.line,
-    column: input.column,
+    offset: position.offset,
+    line: position.line,
+    column: position.column,
     expected: [],
     message,
     committed: false,

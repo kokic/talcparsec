@@ -14,8 +14,7 @@ enum TexNode {
   Parameter(Int)
 } derive(Eq, Debug)
 
-///|
-fn tex_comment_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_comment_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.char('%')
   .then(
     @talcparsec.none_of("\n").many().map(chars => String::from_array(chars)),
@@ -24,7 +23,7 @@ fn tex_comment_parser() -> @talcparsec.Parser[TexNode] {
 }
 
 ///|
-fn tex_verbatim_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_verbatim_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.string("\\verb")
   .attempt()
   .bind(_ => {
@@ -41,7 +40,7 @@ fn tex_verbatim_parser() -> @talcparsec.Parser[TexNode] {
 }
 
 ///|
-fn tex_math_node_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_math_node_parser() -> @talcparsec.StringParser[TexNode] {
   tex_comment_parser()
   .or(tex_verbatim_parser().attempt())
   .or(tex_environment_parser().attempt())
@@ -55,7 +54,7 @@ fn tex_math_node_parser() -> @talcparsec.Parser[TexNode] {
 }
 
 ///|
-fn tex_math_body(closing : String) -> @talcparsec.Parser[Array[TexNode]] {
+fn tex_math_body(closing : String) -> @talcparsec.StringParser[Array[TexNode]] {
   @talcparsec.Parser::new(input => {
     let values = Array::new(capacity=4)
     for current = input {
@@ -75,7 +74,7 @@ fn tex_math_body(closing : String) -> @talcparsec.Parser[Array[TexNode]] {
 }
 
 ///|
-fn tex_math_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_math_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.string("$$")
   .then(tex_math_body("$$"))
   .map(nodes => DisplayMath(nodes))
@@ -88,26 +87,26 @@ fn tex_math_parser() -> @talcparsec.Parser[TexNode] {
 }
 
 ///|
-fn tex_command_name() -> @talcparsec.Parser[String] {
+fn tex_command_name() -> @talcparsec.StringParser[String] {
   @talcparsec.ascii_letter().some().map(chars => String::from_array(chars))
 }
 
 ///|
-fn tex_command_opt_arg() -> @talcparsec.Parser[Array[TexNode]] {
+fn tex_command_opt_arg() -> @talcparsec.StringParser[Array[TexNode]] {
   @talcparsec.delay(tex_node_parser)
   .many()
   .between(@talcparsec.char('['), @talcparsec.char(']'))
 }
 
 ///|
-fn tex_command_req_arg() -> @talcparsec.Parser[Array[TexNode]] {
+fn tex_command_req_arg() -> @talcparsec.StringParser[Array[TexNode]] {
   @talcparsec.delay(tex_node_parser)
   .many()
   .between(@talcparsec.char('{'), @talcparsec.char('}'))
 }
 
 ///|
-fn tex_command_detached_arg() -> @talcparsec.Parser[TexNode] {
+fn tex_command_detached_arg() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.satisfy("detached cmd arg", ch => {
     Char::is_ascii_alphabetic(ch) || Char::is_ascii_digit(ch)
   })
@@ -116,12 +115,12 @@ fn tex_command_detached_arg() -> @talcparsec.Parser[TexNode] {
 }
 
 ///|
-fn tex_cmd_spaces() -> @talcparsec.Parser[Unit] {
+fn tex_cmd_spaces() -> @talcparsec.StringParser[Unit] {
   @talcparsec.char(' ').many().map(_ => ())
 }
 
 ///|
-fn tex_command_args() -> @talcparsec.Parser[Array[TexNode]] {
+fn tex_command_args() -> @talcparsec.StringParser[Array[TexNode]] {
   @talcparsec.spaces().then(
     @talcparsec.Parser::new(input => {
       let values = Array::new(capacity=4)
@@ -153,7 +152,7 @@ fn tex_command_args() -> @talcparsec.Parser[Array[TexNode]] {
 }
 
 ///|
-fn tex_command_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_command_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.char('\\')
   .then(tex_command_name())
   .attempt()
@@ -161,7 +160,7 @@ fn tex_command_parser() -> @talcparsec.Parser[TexNode] {
 }
 
 ///|
-fn tex_math_arg() -> @talcparsec.Parser[Array[TexNode]] {
+fn tex_math_arg() -> @talcparsec.StringParser[Array[TexNode]] {
   @talcparsec.delay(tex_node_parser)
   .many()
   .between(@talcparsec.char('{'), @talcparsec.char('}'))
@@ -175,24 +174,24 @@ fn tex_math_arg() -> @talcparsec.Parser[Array[TexNode]] {
 }
 
 ///|
-fn tex_superscript_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_superscript_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.char('^').then(tex_math_arg()).map(nodes => Superscript(nodes))
 }
 
 ///|
-fn tex_subscript_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_subscript_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.char('_').then(tex_math_arg()).map(nodes => Subscript(nodes))
 }
 
 ///|
-fn tex_escaped_special_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_escaped_special_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.char('\\').then(
     @talcparsec.one_of("\\{}&^_$%#~").map(ch => Text(ch.to_string())),
   )
 }
 
 ///|
-fn tex_env_body(name : String) -> @talcparsec.Parser[Array[TexNode]] {
+fn tex_env_body(name : String) -> @talcparsec.StringParser[Array[TexNode]] {
   @talcparsec.Parser::new(input => {
     let values = Array::new(capacity=4)
     for current = input {
@@ -212,7 +211,7 @@ fn tex_env_body(name : String) -> @talcparsec.Parser[Array[TexNode]] {
 }
 
 ///|
-fn tex_environment_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_environment_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.string("\\begin{")
   .then(tex_command_name())
   .bind(name => {
@@ -223,14 +222,14 @@ fn tex_environment_parser() -> @talcparsec.Parser[TexNode] {
 }
 
 ///|
-fn tex_parameter_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_parameter_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.char('#').then(
     @talcparsec.ascii_digit().map(ch => Parameter(ch.to_int() - '0'.to_int())),
   )
 }
 
 ///|
-fn tex_group_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_group_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.delay(tex_node_parser)
   .many()
   .between(@talcparsec.char('{'), @talcparsec.char('}'))
@@ -238,7 +237,7 @@ fn tex_group_parser() -> @talcparsec.Parser[TexNode] {
 }
 
 ///|
-fn tex_text_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_text_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.take_while("TeX text", ch => {
     ch != '\\' &&
     ch != '{' &&
@@ -254,7 +253,7 @@ fn tex_text_parser() -> @talcparsec.Parser[TexNode] {
 }
 
 ///|
-fn tex_node_parser() -> @talcparsec.Parser[TexNode] {
+fn tex_node_parser() -> @talcparsec.StringParser[TexNode] {
   tex_comment_parser()
   .or(tex_verbatim_parser().attempt())
   .or(tex_math_parser())
@@ -269,7 +268,7 @@ fn tex_node_parser() -> @talcparsec.Parser[TexNode] {
 }
 
 ///|
-fn tex_document_parser() -> @talcparsec.Parser[Array[TexNode]] {
+fn tex_document_parser() -> @talcparsec.StringParser[Array[TexNode]] {
   @talcparsec.spaces().then(tex_node_parser().many()).skip(@talcparsec.eof())
 }
 
@@ -289,7 +288,7 @@ test "parse TeX-like document" {
     #|  \end{lemma}
     #|\end{center}
   @test.assert_eq(
-    tex_document_parser().parse(source),
+    tex_document_parser().parse(@talcparsec.Input::new(source)),
     Ok([
       Command("section", [Text("Intro")]),
       Text("\nHello "),
@@ -319,7 +318,9 @@ test "parse TeX-like document" {
 ///|
 test "parse nested TeX groups and commands" {
   @test.assert_eq(
-    tex_document_parser().parse("\\textbf{outer {nested} \\emph{inner}}"),
+    tex_document_parser().parse(
+      @talcparsec.Input::new("\\textbf{outer {nested} \\emph{inner}}"),
+    ),
     Ok([
       Command("textbf", [
         Text("outer "),
@@ -330,7 +331,7 @@ test "parse nested TeX groups and commands" {
     ]),
   )
   @test.assert_eq(
-    tex_document_parser().parse("\\LaTeX"),
+    tex_document_parser().parse(@talcparsec.Input::new("\\LaTeX")),
     Ok([Command("LaTeX", [])]),
   )
 }
@@ -338,11 +339,11 @@ test "parse nested TeX groups and commands" {
 ///|
 test "parse display and inline math" {
   @test.assert_eq(
-    tex_document_parser().parse("$$\\pi = 3.14$$"),
+    tex_document_parser().parse(@talcparsec.Input::new("$$\\pi = 3.14$$")),
     Ok([DisplayMath([Command("pi", []), Text("= 3.14")])]),
   )
   @test.assert_eq(
-    tex_document_parser().parse("$e^{i\\pi} = -1$"),
+    tex_document_parser().parse(@talcparsec.Input::new("$e^{i\\pi} = -1$")),
     Ok([
       InlineMath([
         Text("e"),
@@ -356,11 +357,13 @@ test "parse display and inline math" {
 ///|
 test "parse TeX comments" {
   @test.assert_eq(
-    tex_document_parser().parse("Hello% world\nMoonBit"),
+    tex_document_parser().parse(@talcparsec.Input::new("Hello% world\nMoonBit")),
     Ok([Text("Hello"), Comment(" world"), Text("\nMoonBit")]),
   )
   @test.assert_eq(
-    tex_document_parser().parse("% full line comment\n\\foo"),
+    tex_document_parser().parse(
+      @talcparsec.Input::new("% full line comment\n\\foo"),
+    ),
     Ok([Comment(" full line comment"), Text("\n"), Command("foo", [])]),
   )
 }
@@ -368,11 +371,11 @@ test "parse TeX comments" {
 ///|
 test "parse verbatim text" {
   @test.assert_eq(
-    tex_document_parser().parse("\\verb|c@d%$e|"),
+    tex_document_parser().parse(@talcparsec.Input::new("\\verb|c@d%$e|")),
     Ok([Verbatim("c@d%$e")]),
   )
   @test.assert_eq(
-    tex_document_parser().parse("\\verb+{\\}+"),
+    tex_document_parser().parse(@talcparsec.Input::new("\\verb+{\\}+")),
     Ok([Verbatim("{\\}")]),
   )
 }
@@ -380,7 +383,9 @@ test "parse verbatim text" {
 ///|
 test "parse TeX environments" {
   @test.assert_eq(
-    tex_document_parser().parse("\\begin{center}\nHello\n\\end{center}"),
+    tex_document_parser().parse(
+      @talcparsec.Input::new("\\begin{center}\nHello\n\\end{center}"),
+    ),
     Ok([Environment("center", [Text("\nHello\n")])]),
   )
 }
@@ -389,7 +394,9 @@ test "parse TeX environments" {
 test "parse nested environments" {
   @test.assert_eq(
     tex_document_parser().parse(
-      "\\begin{outer}\\begin{inner}x\\end{inner}y\\end{outer}",
+      @talcparsec.Input::new(
+        "\\begin{outer}\\begin{inner}x\\end{inner}y\\end{outer}",
+      ),
     ),
     Ok([Environment("outer", [Environment("inner", [Text("x")]), Text("y")])]),
   )
@@ -398,7 +405,9 @@ test "parse nested environments" {
 ///|
 test "parse TeX parameters" {
   @test.assert_eq(
-    tex_document_parser().parse("\\newcommand{\\foo}[2]{#1 and #2}"),
+    tex_document_parser().parse(
+      @talcparsec.Input::new("\\newcommand{\\foo}[2]{#1 and #2}"),
+    ),
     Ok([
       Command("newcommand", [
         Command("foo", []),
@@ -414,7 +423,9 @@ test "parse TeX parameters" {
 ///|
 test "parse escaped special characters" {
   @test.assert_eq(
-    tex_document_parser().parse("\\{ \\} \\\\ \\$ \\& \\# \\% \\_ \\^ \\~"),
+    tex_document_parser().parse(
+      @talcparsec.Input::new("\\{ \\} \\\\ \\$ \\& \\# \\% \\_ \\^ \\~"),
+    ),
     Ok([
       Text("{"),
       Text(" "),
@@ -442,14 +453,15 @@ test "parse escaped special characters" {
 ///|
 test "parse command with multiple arguments" {
   @test.assert_eq(
-    tex_document_parser().parse("\\frac{a}{b}"),
+    tex_document_parser().parse(@talcparsec.Input::new("\\frac{a}{b}")),
     Ok([Command("frac", [Text("a"), Text("b")])]),
   )
 }
 
 ///|
 test "report unclosed TeX group" {
-  match tex_document_parser().parse("\\section{broken") {
+  match
+    tex_document_parser().parse(@talcparsec.Input::new("\\section{broken")) {
     Err(error) => {
       @test.assert_eq(error.offset(), 15)
       @test.assert_eq(error.line(), 1)

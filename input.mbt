@@ -1,5 +1,22 @@
 ///|
-/// Immutable input cursor used by every parser invocation.
+/// A source position reported by parser diagnostics.
+pub(all) struct Position {
+  offset : Int
+  line : Int
+  column : Int
+} derive(Eq, Debug)
+
+///|
+/// Operations shared by parser input cursors. `cursor` must increase whenever
+/// an input element is consumed.
+pub(open) trait Cursor {
+  fn cursor(Self) -> Int
+  fn position(Self) -> Position
+  fn is_at_eof(Self) -> Bool
+}
+
+///|
+/// Immutable character input cursor.
 /// Offsets are UTF-16 code unit offsets, matching MoonBit string indexing.
 pub(all) struct Input {
   source : String
@@ -44,6 +61,14 @@ pub fn Input::peek(self : Input) -> Char? {
 }
 
 ///|
+pub fn Input::next(self : Input) -> (Char, Input)? {
+  match self.peek() {
+    Some(ch) => Some((ch, self.advance(ch)))
+    None => None
+  }
+}
+
+///|
 pub fn Input::advance(self : Input, ch : Char) -> Input {
   if ch == '\n' {
     Input::{
@@ -74,4 +99,19 @@ pub fn Input::advance_string(self : Input, text : String) -> Input {
 ///|
 pub fn Input::remaining(self : Input) -> StringView {
   self.source.view(start_offset=self.offset)
+}
+
+///|
+pub impl Cursor for Input with fn cursor(self) {
+  self.offset
+}
+
+///|
+pub impl Cursor for Input with fn position(self) {
+  { offset: self.offset, line: self.line, column: self.column }
+}
+
+///|
+pub impl Cursor for Input with fn is_at_eof(self) {
+  self.is_eof()
 }

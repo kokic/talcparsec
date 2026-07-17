@@ -1,8 +1,8 @@
 ///|
-pub fn[T, U] Parser::bind(
-  self : Parser[T],
-  next : (T) -> Parser[U],
-) -> Parser[U] {
+pub fn[I : Cursor, T, U] Parser::bind(
+  self : Parser[I, T],
+  next : (T) -> Parser[I, U],
+) -> Parser[I, U] {
   Parser::new(input => {
     self
     .run(input)
@@ -11,7 +11,7 @@ pub fn[T, U] Parser::bind(
       next(value)
       .run(rest)
       .map_err(error => {
-        guard rest.offset != input.offset else { error }
+        guard rest.cursor() != input.cursor() else { error }
         error.with_commit()
       })
     })
@@ -19,22 +19,34 @@ pub fn[T, U] Parser::bind(
 }
 
 ///|
-pub fn[T, U] Parser::map(self : Parser[T], f : (T) -> U) -> Parser[U] {
+pub fn[I : Cursor, T, U] Parser::map(
+  self : Parser[I, T],
+  f : (T) -> U,
+) -> Parser[I, U] {
   self.bind(value => pure(f(value)))
 }
 
 ///|
-pub fn[T, U] Parser::then(self : Parser[T], next : Parser[U]) -> Parser[U] {
+pub fn[I : Cursor, T, U] Parser::then(
+  self : Parser[I, T],
+  next : Parser[I, U],
+) -> Parser[I, U] {
   self.bind(_ => next)
 }
 
 ///|
-pub fn[T, U] Parser::skip(self : Parser[T], next : Parser[U]) -> Parser[T] {
+pub fn[I : Cursor, T, U] Parser::skip(
+  self : Parser[I, T],
+  next : Parser[I, U],
+) -> Parser[I, T] {
   self.bind(value => next.map(_ => value))
 }
 
 ///|
-pub fn[T] Parser::or(self : Parser[T], other : Parser[T]) -> Parser[T] {
+pub fn[I, T] Parser::or(
+  self : Parser[I, T],
+  other : Parser[I, T],
+) -> Parser[I, T] {
   Parser::new(input => {
     match self.run(input) {
       Ok((value, rest)) => Ok((value, rest))
@@ -49,12 +61,12 @@ pub fn[T] Parser::or(self : Parser[T], other : Parser[T]) -> Parser[T] {
 }
 
 ///|
-pub fn[T] Parser::attempt(self : Parser[T]) -> Parser[T] {
+pub fn[I, T] Parser::attempt(self : Parser[I, T]) -> Parser[I, T] {
   Parser::new(input => self.run(input).map_err(error => error.without_commit()))
 }
 
 ///|
-pub fn[T] Parser::optional(self : Parser[T]) -> Parser[T?] {
+pub fn[I, T] Parser::optional(self : Parser[I, T]) -> Parser[I, T?] {
   Parser::new(input => {
     match self.run(input) {
       Ok((value, rest)) => Ok((Some(value), rest))
@@ -64,13 +76,13 @@ pub fn[T] Parser::optional(self : Parser[T]) -> Parser[T?] {
 }
 
 ///|
-pub fn[T] Parser::many(self : Parser[T]) -> Parser[Array[T]] {
+pub fn[I : Cursor, T] Parser::many(self : Parser[I, T]) -> Parser[I, Array[T]] {
   Parser::new(input => {
     let values = Array::new()
     for rest = input {
       match self.run(rest) {
         Ok((value, next)) =>
-          if next.offset == rest.offset {
+          if next.cursor() == rest.cursor() {
             break Err(
               ParseError::message(rest, "many parser accepted empty input"),
             )
@@ -85,23 +97,23 @@ pub fn[T] Parser::many(self : Parser[T]) -> Parser[Array[T]] {
 }
 
 ///|
-pub fn[T] Parser::some(self : Parser[T]) -> Parser[Array[T]] {
+pub fn[I : Cursor, T] Parser::some(self : Parser[I, T]) -> Parser[I, Array[T]] {
   self.bind(head => self.many().map(tail => array_cons(tail, head)))
 }
 
 ///|
-pub fn[T, S] Parser::sep_by(
-  self : Parser[T],
-  sep : Parser[S],
-) -> Parser[Array[T]] {
+pub fn[I : Cursor, T, S] Parser::sep_by(
+  self : Parser[I, T],
+  sep : Parser[I, S],
+) -> Parser[I, Array[T]] {
   self.sep_by1(sep).or(pure([]))
 }
 
 ///|
-pub fn[T, S] Parser::sep_by1(
-  self : Parser[T],
-  sep : Parser[S],
-) -> Parser[Array[T]] {
+pub fn[I : Cursor, T, S] Parser::sep_by1(
+  self : Parser[I, T],
+  sep : Parser[I, S],
+) -> Parser[I, Array[T]] {
   self.bind(head => {
     sep
     .then(self)
@@ -116,56 +128,65 @@ pub fn[T, S] Parser::sep_by1(
 }
 
 ///|
-pub fn[T] Parser::label(self : Parser[T], expected : String) -> Parser[T] {
+pub fn[I : Cursor, T] Parser::label(
+  self : Parser[I, T],
+  expected : String,
+) -> Parser[I, T] {
   Parser::new(input => {
     self
     .run(input)
     .map_err(error => {
-      guard error.offset == input.offset else { error }
+      guard error.offset == input.cursor() else { error }
       ParseError::new(input, expected)
     })
   })
 }
 
 ///|
-pub fn[T] Parser::lexeme(self : Parser[T]) -> Parser[T] {
+pub fn[T] Parser::lexeme(self : Parser[Input, T]) -> Parser[Input, T] {
   self.skip(spaces())
 }
 
 ///|
-pub fn[T, L, R] Parser::between(
-  self : Parser[T],
-  left : Parser[L],
-  right : Parser[R],
-) -> Parser[T] {
+pub fn[I : Cursor, T, L, R] Parser::between(
+  self : Parser[I, T],
+  left : Parser[I, L],
+  right : Parser[I, R],
+) -> Parser[I, T] {
   left.then(self).skip(right)
 }
 
 ///|
-pub fn[T, L] Parser::after(self : Parser[T], left : Parser[L]) -> Parser[T] {
+pub fn[I : Cursor, T, L] Parser::after(
+  self : Parser[I, T],
+  left : Parser[I, L],
+) -> Parser[I, T] {
   left.then(self)
 }
 
 ///|
-pub fn[T, R] Parser::before(self : Parser[T], right : Parser[R]) -> Parser[T] {
+pub fn[I : Cursor, T, R] Parser::before(
+  self : Parser[I, T],
+  right : Parser[I, R],
+) -> Parser[I, T] {
   self.skip(right)
 }
 
 ///|
-pub fn[T] lexeme(parser : Parser[T]) -> Parser[T] {
+pub fn[T] lexeme(parser : Parser[Input, T]) -> Parser[Input, T] {
   parser.lexeme()
 }
 
 ///|
-pub fn symbol(text : String) -> Parser[String] {
+pub fn symbol(text : String) -> Parser[Input, String] {
   string(text).lexeme()
 }
 
 ///|
-pub fn[T, L, R] between(
-  left : Parser[L],
-  parser : Parser[T],
-  right : Parser[R],
-) -> Parser[T] {
+pub fn[I : Cursor, T, L, R] between(
+  left : Parser[I, L],
+  parser : Parser[I, T],
+  right : Parser[I, R],
+) -> Parser[I, T] {
   parser.between(left, right)
 }

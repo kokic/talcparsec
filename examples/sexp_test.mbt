@@ -5,7 +5,7 @@ enum Sexp {
 } derive(Eq, Debug)
 
 ///|
-fn atom_parser() -> @talcparsec.Parser[Sexp] {
+fn atom_parser() -> @talcparsec.StringParser[Sexp] {
   @talcparsec.none_of("() \t\r\n")
   .some()
   .map(chars => Atom(String::from_array(chars)))
@@ -13,7 +13,7 @@ fn atom_parser() -> @talcparsec.Parser[Sexp] {
 }
 
 ///|
-fn sexp_parser() -> @talcparsec.Parser[Sexp] {
+fn sexp_parser() -> @talcparsec.StringParser[Sexp] {
   atom_parser().or(
     @talcparsec.delay(sexp_parser)
     .many()
@@ -25,7 +25,9 @@ fn sexp_parser() -> @talcparsec.Parser[Sexp] {
 ///|
 test "parse nested S-expression" {
   let parser = @talcparsec.spaces().then(sexp_parser())
-  let result = parser.parse("  (define (square x) (* x x))  ")
+  let result = parser.parse(
+    @talcparsec.Input::new("  (define (square x) (* x x))  "),
+  )
   @test.assert_eq(
     result,
     Ok(
@@ -36,5 +38,5 @@ test "parse nested S-expression" {
       ]),
     ),
   )
-  @test.assert_eq(parser.parse("()"), Ok(Form([])))
+  @test.assert_eq(parser.parse(@talcparsec.Input::new("()")), Ok(Form([])))
 }

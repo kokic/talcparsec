@@ -1,7 +1,7 @@
 ///|
-pub fn eof() -> Parser[Unit] {
+pub fn[I : Cursor] eof() -> Parser[I, Unit] {
   Parser::new(input => {
-    if input.is_eof() {
+    if input.is_at_eof() {
       Ok(((), input))
     } else {
       Err(ParseError::new(input, "end of input"))
@@ -10,12 +10,16 @@ pub fn eof() -> Parser[Unit] {
 }
 
 ///|
-pub fn satisfy(name : String, predicate : (Char) -> Bool) -> Parser[Char] {
+pub fn[I : Cursor, T] satisfy_input(
+  next : (I) -> (T, I)?,
+  name : String,
+  predicate : (T) -> Bool,
+) -> Parser[I, T] {
   Parser::new(input => {
-    match input.peek() {
-      Some(ch) =>
-        if predicate(ch) {
-          Ok((ch, input.advance(ch)))
+    match next(input) {
+      Some((token, rest)) =>
+        if predicate(token) {
+          Ok((token, rest))
         } else {
           Err(ParseError::new(input, name))
         }
@@ -25,22 +29,30 @@ pub fn satisfy(name : String, predicate : (Char) -> Bool) -> Parser[Char] {
 }
 
 ///|
-pub fn char(expected : Char) -> Parser[Char] {
+pub fn char(expected : Char) -> Parser[Input, Char] {
   satisfy("'" + expected.to_string() + "'", ch => ch == expected)
 }
 
 ///|
-pub fn one_of(chars : String) -> Parser[Char] {
+pub fn satisfy(
+  name : String,
+  predicate : (Char) -> Bool,
+) -> Parser[Input, Char] {
+  satisfy_input(Input::next, name, predicate)
+}
+
+///|
+pub fn one_of(chars : String) -> Parser[Input, Char] {
   satisfy("one of " + chars, ch => chars.contains_char(ch))
 }
 
 ///|
-pub fn none_of(chars : String) -> Parser[Char] {
+pub fn none_of(chars : String) -> Parser[Input, Char] {
   satisfy("none of " + chars, ch => !chars.contains_char(ch))
 }
 
 ///|
-pub fn string(expected : String) -> Parser[String] {
+pub fn string(expected : String) -> Parser[Input, String] {
   Parser::new(input => {
     if input.remaining().has_prefix(expected.to_string_view()) {
       Ok((expected, input.advance_string(expected)))
@@ -51,7 +63,10 @@ pub fn string(expected : String) -> Parser[String] {
 }
 
 ///|
-pub fn take_while(name : String, predicate : (Char) -> Bool) -> Parser[String] {
+pub fn take_while(
+  name : String,
+  predicate : (Char) -> Bool,
+) -> Parser[Input, String] {
   Parser::new(input => {
     let chars = Array::new()
     let rest = for rest = input {
@@ -73,21 +88,21 @@ pub fn take_while(name : String, predicate : (Char) -> Bool) -> Parser[String] {
 }
 
 ///|
-pub fn ascii_digit() -> Parser[Char] {
+pub fn ascii_digit() -> Parser[Input, Char] {
   satisfy("ASCII digit", Char::is_ascii_digit)
 }
 
 ///|
-pub fn ascii_letter() -> Parser[Char] {
+pub fn ascii_letter() -> Parser[Input, Char] {
   satisfy("ASCII letter", Char::is_ascii_alphabetic)
 }
 
 ///|
-pub fn whitespace() -> Parser[Char] {
+pub fn whitespace() -> Parser[Input, Char] {
   satisfy("whitespace", Char::is_whitespace)
 }
 
 ///|
-pub fn spaces() -> Parser[Array[Char]] {
+pub fn spaces() -> Parser[Input, Array[Char]] {
   whitespace().many()
 }
