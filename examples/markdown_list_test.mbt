@@ -79,6 +79,52 @@ fn source_position(
 }
 
 ///|
+fn compute_indentation(line : StringView) -> Int {
+  line.length() - line.trim_start().length()
+}
+
+///|
+fn parse_line_content(content : StringView) -> String raise LayoutError {
+  guard content.has_prefix("- ") else { raise ExpectedListMarker }
+  let text = content.sub(start = 2).to_owned()
+  guard !text.is_empty() else { raise ExpectedListItemText }
+  text
+}
+
+///|
+fn adjust_indentation(
+  indents : Array[Int],
+  indentation : Int,
+  position : @talcparsec.Position,
+  tokens : Array[LocatedToken],
+) -> Unit raise LayoutError {
+  let mut current = indents.last().unwrap()
+  if indentation > current {
+    indents.push(indentation)
+    tokens.push({ token: Indent, position })
+  } else {
+    while indentation < current {
+      ignore(indents.pop())
+      tokens.push({ token: Dedent, position })
+      current = indents.last().unwrap()
+    }
+    guard indentation == current else { raise InconsistentIndentation }
+  }
+}
+
+///|
+fn close_remaining_indents(
+  indents : Array[Int],
+  tokens : Array[LocatedToken],
+  eof_position : @talcparsec.Position,
+) -> Unit {
+  while indents.length() > 1 {
+    ignore(indents.pop())
+    tokens.push({ token: Dedent, position: eof_position })
+  }
+}
+
+///|
 fn tokenize_markdown_list(source : String) -> LexedTokens raise LayoutError {
   let tokens = Array::new()
   let indents = [0]
@@ -86,52 +132,40 @@ fn tokenize_markdown_list(source : String) -> LexedTokens raise LayoutError {
   let mut offset = 0
   let mut line_number = 1
   let mut eof_position = source_position(0, 1, 1)
+
   for index in 0..<lines.length() {
     let raw_line = lines[index]
     let line = raw_line.trim_end()
-    let position = source_position(offset, line_number, 1)
+    let is_last = index + 1 == lines.length()
+
     if !line.is_empty() {
+      let position = source_position(offset, line_number, 1)
+      let indentation = compute_indentation(line)
       let content = line.trim_start()
-      let indentation = line.length() - content.length()
+
+      adjust_indentation(indents, indentation, position, tokens)
+      let text = parse_line_content(content)
+
       let content_position = source_position(
         offset + indentation,
         line_number,
         indentation + 1,
       )
-      let mut current_indentation = indents.last().unwrap()
-      if indentation > current_indentation {
-        indents.push(indentation)
-        tokens.push({ token: Indent, position })
-      } else {
-        while indentation < current_indentation {
-          ignore(indents.pop())
-          tokens.push({ token: Dedent, position })
-          current_indentation = indents.last().unwrap()
-        }
-        guard indentation == current_indentation else {
-          raise InconsistentIndentation
-        }
-      }
-      guard content.has_prefix("- ") else { raise ExpectedListMarker }
-      let text = content.sub(start=2).to_owned()
-      guard !text.is_empty() else { raise ExpectedListItemText }
       tokens.push({ token: Bullet, position: content_position })
       tokens.push({ token: ListText(text), position: content_position })
       tokens.push({ token: Newline, position: content_position })
     }
-    if index + 1 < lines.length() {
-      offset = offset + raw_line.length() + 1
-      line_number = line_number + 1
-      eof_position = source_position(offset, line_number, 1)
-    } else {
-      offset = offset + raw_line.length()
-      eof_position = source_position(offset, line_number, raw_line.length() + 1)
-    }
+
+    offset = offset + raw_line.length() + (if is_last { 0 } else { 1 })
+    line_number = if is_last { line_number } else { line_number + 1 }
+    eof_position = source_position(
+      offset,
+      line_number,
+      if is_last { raw_line.length() + 1 } else { 1 },
+    )
   }
-  while indents.length() > 1 {
-    ignore(indents.pop())
-    tokens.push({ token: Dedent, position: eof_position })
-  }
+
+  close_remaining_indents(indents, tokens, eof_position)
   { tokens, eof_position }
 }
 
