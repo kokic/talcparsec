@@ -189,7 +189,7 @@ pub fn[I : Cursor, T] Parser::not_followed_by(
 ) -> Parser[I, Unit] {
   Parser::new(input => {
     match self.run(input) {
-      Ok(_) => Err(ParseError::message(input, "unexpected " + label))
+      Ok(_) => Err(ParseError::message(input, "unexpected: \{label}"))
       Err(_) => Ok(((), input))
     }
   })
