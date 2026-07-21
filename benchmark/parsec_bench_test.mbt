@@ -101,7 +101,7 @@ fn character_choice(chars : String) -> @talcparsec.StringParser[Char] {
 test "bench string exact n=4096" (it : @bench.T) {
   let input = repeat_text("a", 4096)
   let parser = @talcparsec.string(input)
-  it.bench(fn() { it.keep(parser.parse(@talcparsec.Input::new(input))) })
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }
 
 ///|
@@ -111,14 +111,14 @@ test "bench take_while ASCII n=4096" (it : @bench.T) {
     "ASCII letters",
     Char::is_ascii_alphabetic,
   )
-  it.bench(fn() { it.keep(parser.parse(@talcparsec.Input::new(input))) })
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }
 
 ///|
 test "bench sep_by identifiers n=1000" (it : @bench.T) {
   let input = make_identifier_list(1000)
   let parser = identifier_parser().sep_by(@talcparsec.symbol(","))
-  it.bench(fn() { it.keep(parser.parse(@talcparsec.Input::new(input))) })
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }
 
 ///|
@@ -129,14 +129,14 @@ test "bench S-expression flat atoms n=1000" (it : @bench.T) {
     Ok(value) => it.keep(value.node_count())
     Err(error) => it.keep(error.offset())
   }
-  it.bench(fn() { it.keep(parser.parse(@talcparsec.Input::new(input))) })
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }
 
 ///|
 test "bench S-expression nested depth=128" (it : @bench.T) {
   let input = make_nested_sexp(128)
   let parser = sexp_parser()
-  it.bench(fn() { it.keep(parser.parse(@talcparsec.Input::new(input))) })
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }
 
 ///|
@@ -146,11 +146,11 @@ test "bench attempt common prefix n=4096" (it : @bench.T) {
   let parser = @talcparsec.string(prefix + "b")
     .attempt()
     .or(@talcparsec.string(input))
-  it.bench(fn() { it.keep(parser.parse(@talcparsec.Input::new(input))) })
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }
 
 ///|
 test "bench choice failure alternatives=26" (it : @bench.T) {
   let parser = character_choice("abcdefghijklmnopqrstuvwxyz")
-  it.bench(fn() { it.keep(parser.parse(@talcparsec.Input::new("!"))) })
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new("!"))))
 }

@@ -82,7 +82,7 @@ pub fn[I : Cursor, T] Parser::many(self : Parser[I, T]) -> Parser[I, Array[T]] {
     for rest = input {
       match self.run(rest) {
         Ok((value, next)) =>
-          if next.cursor() == rest.cursor() {
+          if next.same_cursor(rest) {
             break Err(
               ParseError::message(rest, "many parser accepted empty input"),
             )
@@ -112,10 +112,10 @@ pub fn[I : Cursor, T, S] Parser::sep_by(
 ///|
 pub fn[I : Cursor, T, S] Parser::sep_by1(
   self : Parser[I, T],
-  sep : Parser[I, S],
+  separator : Parser[I, S],
 ) -> Parser[I, Array[T]] {
   self.bind(head => {
-    sep
+    separator
     .then(self)
     .many()
     .map(tail => {
@@ -180,6 +180,72 @@ pub fn[T] lexeme(parser : Parser[Input, T]) -> Parser[Input, T] {
 ///|
 pub fn symbol(text : String) -> Parser[Input, String] {
   string(text).lexeme()
+}
+
+///|
+pub fn[I : Cursor, T] Parser::not_followed_by(
+  self : Parser[I, T],
+  label : String,
+) -> Parser[I, Unit] {
+  Parser::new(input => {
+    match self.run(input) {
+      Ok(_) => Err(ParseError::message(input, "unexpected " + label))
+      Err(_) => Ok(((), input))
+    }
+  })
+}
+
+///|
+pub fn[I : Cursor, T, U] Parser::many_until(
+  self : Parser[I, T],
+  terminator : Parser[I, U],
+) -> Parser[I, Array[T]] {
+  Parser::new(input => {
+    let values = Array::new()
+    for rest = input {
+      match terminator.run(rest) {
+        Ok((_, next)) => break Ok((values, next))
+        Err(_) =>
+          match self.run(rest) {
+            Ok((value, next)) => {
+              if next.same_cursor(rest) {
+                break Err(
+                  ParseError::message(
+                    rest, "many_until parser accepted empty input",
+                  ),
+                )
+              }
+              values.push(value)
+              continue next
+            }
+            Err(error) => break error.reject_if_committed(values, rest)
+          }
+      }
+    }
+  })
+}
+
+///|
+fn[I : Cursor, T] choice_impl(
+  parsers : Array[Parser[I, T]],
+  idx : Int,
+  input : I,
+) -> Result[(T, I), ParseError] {
+  guard idx < parsers.length() else {
+    Err(ParseError::message(input, "empty choice"))
+  }
+  match parsers[idx].run(input) {
+    Ok(result) => Ok(result)
+    Err(error) => {
+      guard !error.committed else { Err(error) }
+      choice_impl(parsers, idx + 1, input).map_err(e => error.merge(e))
+    }
+  }
+}
+
+///|
+pub fn[I : Cursor, T] choice(parsers : Array[Parser[I, T]]) -> Parser[I, T] {
+  Parser::new(input => choice_impl(parsers, 0, input))
 }
 
 ///|

@@ -13,6 +13,7 @@ pub(open) trait Cursor {
   fn cursor(Self) -> Int
   fn position(Self) -> Position
   fn is_at_eof(Self) -> Bool
+  fn same_cursor(Self, other : Self) -> Bool = _
 }
 
 ///|
@@ -114,4 +115,9 @@ pub impl Cursor for Input with fn position(self) {
 ///|
 pub impl Cursor for Input with fn is_at_eof(self) {
   self.is_eof()
+}
+
+///|
+impl Cursor with fn same_cursor(self, other) {
+  self.cursor() == other.cursor()
 }
