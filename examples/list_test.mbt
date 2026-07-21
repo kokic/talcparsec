@@ -131,44 +131,49 @@ fn close_remaining_indents(
 }
 
 ///|
+fn scan_list_line(
+  raw_line : StringView,
+  line_start : @talcparsec.Input,
+) -> ListLine? raise LayoutError {
+  let line = raw_line.trim_end()
+  guard !line.is_empty() else { None }
+  let content = line.trim_start(chars=" ")
+  let indentation = line.length() - content.length()
+  let text = parse_line_content(content)
+  Some({
+    indentation,
+    text,
+    position: source_position(
+      line_start.offset() + indentation,
+      line_start.line(),
+      indentation + 1,
+    ),
+  })
+}
+
+///|
+fn advance_source_line(
+  input : @talcparsec.Input,
+  raw_line : StringView,
+  has_newline : Bool,
+) -> @talcparsec.Input {
+  let input = input.advance_string(raw_line.to_owned())
+  guard has_newline else { input }
+  input.advance_string("\n")
+}
+
+///|
 fn scan_markdown_list(source : String) -> ScannedLines raise LayoutError {
   let scanned_lines = Array::new()
-  let lines = source.split("\n").to_array()
-  let mut offset = 0
-  let mut line_number = 1
-  let mut eof_position = source_position(0, 1, 1)
-
-  for index in 0..<lines.length() {
-    let raw_line = lines[index]
-    let line = raw_line.trim_end()
-    let is_last = index + 1 == lines.length()
-
-    if !line.is_empty() {
-      let content = line.trim_start(chars=" ")
-      let indentation = line.length() - content.length()
-      let text = parse_line_content(content)
-      let content_position = source_position(
-        offset + indentation,
-        line_number,
-        indentation + 1,
-      )
-      scanned_lines.push({ indentation, text, position: content_position })
-    }
-
-    offset = offset + raw_line.length() + (if is_last { 0 } else { 1 })
-    line_number = if is_last { line_number } else { line_number + 1 }
-    eof_position = source_position(
-      offset,
-      line_number,
-      if is_last {
-        raw_line.length() + 1
-      } else {
-        1
-      },
-    )
+  let raw_lines = source.split("\n").to_array()
+  let mut input = @talcparsec.Input::new(source)
+  for index in 0..<raw_lines.length() {
+    let raw_line = raw_lines[index]
+    guard scan_list_line(raw_line, input) is Some(line) else {  }
+    scanned_lines.push(line)
+    input = advance_source_line(input, raw_line, index + 1 < raw_lines.length())
   }
-
-  { lines: scanned_lines, eof_position }
+  { lines: scanned_lines, eof_position: input.position() }
 }
 
 ///|

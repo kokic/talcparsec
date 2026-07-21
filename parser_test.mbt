@@ -77,3 +77,99 @@ test "take_while consumes contiguous matching input" {
     Ok(_) => @test.fail("expected take_while to reject empty match")
   }
 }
+
+///|
+test "not_followed_by succeeds when inner parser fails" {
+  let parser = char('x').not_followed_by("x").then(char('a'))
+  @test.assert_eq(parser.parse(Input::new("a")), Ok('a'))
+}
+
+///|
+test "not_followed_by fails when inner parser succeeds" {
+  let parser = char('x').not_followed_by("x").then(char('a'))
+  match parser.parse(Input::new("x")) {
+    Err(error) => @test.assert_eq(error.message_text(), "unexpected x")
+    Ok(_) => @test.fail("expected not_followed_by to reject x")
+  }
+}
+
+///|
+test "not_followed_by guards repetition" {
+  let any_char = satisfy("any", fn(_) { true })
+  let non_star = char('*').not_followed_by("'*'").then(any_char)
+  let parser = char('*')
+    .then(non_star.some().map(chars => String::from_array(chars)))
+    .skip(char('*'))
+  @test.assert_eq(parser.parse(Input::new("*bold*")), Ok("bold"))
+}
+
+///|
+test "many_chars collects zero or more matches" {
+  let not_newline = satisfy("not newline", fn(c) { c != '\n' })
+  @test.assert_eq(many_chars(not_newline).parse(Input::new("")), Ok(""))
+  @test.assert_eq(many_chars(not_newline).parse(Input::new("abc")), Ok("abc"))
+  let (result, _) = many_chars(not_newline)
+    .parse_partial(Input::new("abc\ndef"))
+    .unwrap()
+  @test.assert_eq(result, "abc")
+}
+
+///|
+test "many_chars1 requires at least one match" {
+  let digit = ascii_digit()
+  @test.assert_eq(many_chars1(digit).parse(Input::new("42")), Ok("42"))
+  match many_chars1(digit).parse(Input::new("abc")) {
+    Err(_) => ()
+    Ok(_) => @test.fail("expected many_chars1 to reject no match")
+  }
+}
+
+///|
+test "many_until stops at terminator" {
+  let body = ascii_digit().map(ch => ch.to_string())
+  let terminator = char(';')
+  let result = body.many_until(terminator).parse(Input::new("123;"))
+  @test.assert_eq(result, Ok(["1", "2", "3"]))
+}
+
+///|
+test "many_until returns empty on immediate terminator" {
+  let body = ascii_digit().map(ch => ch.to_string())
+  let terminator = char(';')
+  let result = body.many_until(terminator).parse(Input::new(";"))
+  @test.assert_eq(result, Ok([]))
+}
+
+///|
+test "many_until returns accumulated when body fails" {
+  let body = ascii_digit().map(ch => ch.to_string())
+  let terminator = char(';')
+  @test.assert_eq(
+    body.many_until(terminator).parse(Input::new("123")),
+    Ok(["1", "2", "3"]),
+  )
+}
+
+///|
+test "choice tries alternatives in order" {
+  let parser = choice([char('a'), char('b'), char('c')])
+  @test.assert_eq(parser.parse(Input::new("a")), Ok('a'))
+  @test.assert_eq(parser.parse(Input::new("b")), Ok('b'))
+  @test.assert_eq(parser.parse(Input::new("c")), Ok('c'))
+  match parser.parse(Input::new("x")) {
+    Err(error) => @test.assert_eq(error.expected().contains("'a'"), true)
+    Ok(_) => @test.fail("expected choice to fail on no match")
+  }
+}
+
+///|
+test "choice preserves commit on backtrack" {
+  let parser = choice([
+    string("ab").then(char('c')),
+    string("ab").then(char('d')),
+  ])
+  match parser.parse(Input::new("abd")) {
+    Err(error) => @test.assert_eq(error.is_committed(), true)
+    Ok(_) => @test.fail("expected committed parse error")
+  }
+}
