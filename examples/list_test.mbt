@@ -1,8 +1,6 @@
 ///|
 enum Token {
-  Bullet
-  ListText(String)
-  Newline
+  Item(String)
   Indent
   Dedent
 } derive(Eq, Debug)
@@ -16,6 +14,19 @@ struct LocatedToken {
 ///|
 struct LexedTokens {
   tokens : Array[LocatedToken]
+  eof_position : @talcparsec.Position
+}
+
+///|
+struct ListLine {
+  indentation : Int
+  text : String
+  position : @talcparsec.Position
+} derive(Eq, Debug)
+
+///|
+struct ScannedLines {
+  lines : Array[ListLine]
   eof_position : @talcparsec.Position
 }
 
@@ -79,11 +90,6 @@ fn source_position(
 }
 
 ///|
-fn compute_indentation(line : StringView) -> Int {
-  line.length() - line.trim_start().length()
-}
-
-///|
 fn parse_line_content(content : StringView) -> String raise LayoutError {
   guard content.has_prefix("- ") else { raise ExpectedListMarker }
   let text = content.sub(start = 2).to_owned()
@@ -125,9 +131,8 @@ fn close_remaining_indents(
 }
 
 ///|
-fn tokenize_markdown_list(source : String) -> LexedTokens raise LayoutError {
-  let tokens = Array::new()
-  let indents = [0]
+fn scan_markdown_list(source : String) -> ScannedLines raise LayoutError {
+  let scanned_lines = Array::new()
   let lines = source.split("\n").to_array()
   let mut offset = 0
   let mut line_number = 1
@@ -139,21 +144,15 @@ fn tokenize_markdown_list(source : String) -> LexedTokens raise LayoutError {
     let is_last = index + 1 == lines.length()
 
     if !line.is_empty() {
-      let position = source_position(offset, line_number, 1)
-      let indentation = compute_indentation(line)
-      let content = line.trim_start()
-
-      adjust_indentation(indents, indentation, position, tokens)
+      let content = line.trim_start(chars=" ")
+      let indentation = line.length() - content.length()
       let text = parse_line_content(content)
-
       let content_position = source_position(
         offset + indentation,
         line_number,
         indentation + 1,
       )
-      tokens.push({ token: Bullet, position: content_position })
-      tokens.push({ token: ListText(text), position: content_position })
-      tokens.push({ token: Newline, position: content_position })
+      scanned_lines.push({ indentation, text, position: content_position })
     }
 
     offset = offset + raw_line.length() + (if is_last { 0 } else { 1 })
@@ -165,8 +164,24 @@ fn tokenize_markdown_list(source : String) -> LexedTokens raise LayoutError {
     )
   }
 
-  close_remaining_indents(indents, tokens, eof_position)
-  { tokens, eof_position }
+  { lines: scanned_lines, eof_position }
+}
+
+///|
+fn apply_layout(lines : ScannedLines) -> LexedTokens raise LayoutError {
+  let tokens = Array::new(capacity=lines.lines.length())
+  let indents = [0]
+  for line in lines.lines {
+    adjust_indentation(indents, line.indentation, line.position, tokens)
+    tokens.push({ token: Item(line.text), position: line.position })
+  }
+  close_remaining_indents(indents, tokens, lines.eof_position)
+  { tokens, eof_position: lines.eof_position }
+}
+
+///|
+fn tokenize_markdown_list(source : String) -> LexedTokens raise LayoutError {
+  apply_layout(scan_markdown_list(source))
 }
 
 ///|
@@ -183,23 +198,13 @@ fn layout_token(
 }
 
 ///|
-fn bullet_parser() -> TokenParser[Unit] {
-  layout_token("'-'", token => token is Bullet).map(_ => ())
-}
-
-///|
-fn list_text_parser() -> TokenParser[String] {
-  layout_token("list-item text", token => token is ListText(_)).map(token => {
+fn item_parser() -> TokenParser[String] {
+  layout_token("list item", token => token is Item(_)).map(token => {
     match token {
-      ListText(text) => text
+      Item(text) => text
       _ => ""
     }
   })
-}
-
-///|
-fn newline_parser() -> TokenParser[Unit] {
-  layout_token("newline", token => token is Newline).map(_ => ())
 }
 
 ///|
@@ -219,15 +224,11 @@ fn nested_list_parser() -> TokenParser[Array[ListItem]] {
 
 ///|
 fn list_item_parser() -> TokenParser[ListItem] {
-  bullet_parser().then(
-    list_text_parser().bind(text => {
-      newline_parser().then(
-        nested_list_parser()
-        .optional()
-        .map(children => Item(text, children.unwrap_or([]))),
-      )
-    }),
-  )
+  item_parser().bind(text => {
+    nested_list_parser()
+    .optional()
+    .map(children => Item(text, children.unwrap_or([])))
+  })
 }
 
 ///|
@@ -243,25 +244,82 @@ fn parse_markdown_list(
 }
 
 ///|
-test "lex Markdown list indentation into virtual tokens" {
+test "scan Markdown list lines before applying layout" {
+  let source =
+    #|- groceries
+    #|  - fruit
+  @test.assert_eq(scan_markdown_list(source).lines, [
+    {
+      indentation: 0,
+      text: "groceries",
+      position: source_position(0, 1, 1),
+    },
+    { indentation: 2, text: "fruit", position: source_position(14, 2, 3) },
+  ])
+}
+
+///|
+test "apply indentation as virtual tokens" {
   let source =
     #|- groceries
     #|  - fruit
     #|- chores
   let tokens = tokenize_markdown_list(source)
   @test.assert_eq(tokens.tokens.map(token => token.token), [
-    Bullet,
-    ListText("groceries"),
-    Newline,
+    Item("groceries"),
     Indent,
-    Bullet,
-    ListText("fruit"),
-    Newline,
+    Item("fruit"),
     Dedent,
-    Bullet,
-    ListText("chores"),
-    Newline,
+    Item("chores"),
   ])
+}
+
+///|
+test "blank lines do not affect layout" {
+  let source =
+    #|- groceries
+    #|
+    #|  - fruit
+    #|
+    #|- chores
+  @test.assert_eq(
+    tokenize_markdown_list(source).tokens.map(token => token.token),
+    [Item("groceries"), Indent, Item("fruit"), Dedent, Item("chores")],
+  )
+}
+
+///|
+test "one line can close multiple layout contexts" {
+  let source =
+    #|- groceries
+    #|  - fruit
+    #|    - apples
+    #|- chores
+  @test.assert_eq(
+    tokenize_markdown_list(source).tokens.map(token => token.token),
+    [
+      Item("groceries"),
+      Indent,
+      Item("fruit"),
+      Indent,
+      Item("apples"),
+      Dedent,
+      Dedent,
+      Item("chores"),
+    ],
+  )
+}
+
+///|
+test "reject indentation that does not match an enclosing level" {
+  @test.assert_raise(() =>
+    tokenize_markdown_list("- groceries\n  - fruit\n - vegetables"),
+  )
+}
+
+///|
+test "only spaces are accepted as indentation" {
+  @test.assert_raise(() => tokenize_markdown_list("- groceries\n\t- fruit"))
 }
 
 ///|
@@ -289,18 +347,15 @@ test "parse nested Markdown unordered list from tokens" {
 ///|
 test "token parser reports lexer positions" {
   let tokens = {
-    tokens: [
-      { token: Bullet, position: source_position(4, 2, 3) },
-      { token: Newline, position: source_position(5, 2, 4) },
-    ],
+    tokens: [{ token: Indent, position: source_position(4, 2, 3) }],
     eof_position: source_position(6, 2, 5),
   }
   match parse_markdown_list(tokens) {
     Err(error) => {
-      @test.assert_eq(error.offset(), 5)
+      @test.assert_eq(error.offset(), 4)
       @test.assert_eq(error.line(), 2)
-      @test.assert_eq(error.column(), 4)
-      @test.assert_eq(error.expected(), ["list-item text"])
+      @test.assert_eq(error.column(), 3)
+      @test.assert_eq(error.expected(), ["list item"])
     }
     Ok(_) => @test.fail("expected a token parser error")
   }
