@@ -92,7 +92,7 @@ fn source_position(
 ///|
 fn parse_line_content(content : StringView) -> String raise LayoutError {
   guard content.has_prefix("- ") else { raise ExpectedListMarker }
-  let text = content.sub(start = 2).to_owned()
+  let text = content.sub(start=2).to_owned()
   guard !text.is_empty() else { raise ExpectedListItemText }
   text
 }
@@ -160,7 +160,11 @@ fn scan_markdown_list(source : String) -> ScannedLines raise LayoutError {
     eof_position = source_position(
       offset,
       line_number,
-      if is_last { raw_line.length() + 1 } else { 1 },
+      if is_last {
+        raw_line.length() + 1
+      } else {
+        1
+      },
     )
   }
 
@@ -249,11 +253,7 @@ test "scan Markdown list lines before applying layout" {
     #|- groceries
     #|  - fruit
   @test.assert_eq(scan_markdown_list(source).lines, [
-    {
-      indentation: 0,
-      text: "groceries",
-      position: source_position(0, 1, 1),
-    },
+    { indentation: 0, text: "groceries", position: source_position(0, 1, 1) },
     { indentation: 2, text: "fruit", position: source_position(14, 2, 3) },
   ])
 }
@@ -312,9 +312,9 @@ test "one line can close multiple layout contexts" {
 
 ///|
 test "reject indentation that does not match an enclosing level" {
-  @test.assert_raise(() =>
-    tokenize_markdown_list("- groceries\n  - fruit\n - vegetables"),
-  )
+  @test.assert_raise(() => {
+    tokenize_markdown_list("- groceries\n  - fruit\n - vegetables")
+  })
 }
 
 ///|

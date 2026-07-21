@@ -14,6 +14,7 @@ enum TexNode {
   Parameter(Int)
 } derive(Eq, Debug)
 
+///|
 fn tex_comment_parser() -> @talcparsec.StringParser[TexNode] {
   @talcparsec.char('%')
   .then(
