@@ -31,7 +31,9 @@ struct MdListItem {
 pub let special_chars = "]*_`[!\\"
 
 ///|
-pub let delim_char : (Char) -> String = c => "'\{c}'"
+pub fn delim(c : Char) -> @talcparsec.StringParser[Unit] {
+  @talcparsec.char(c).not_followed_by("'\{c}'")
+}
 
 ///|
 pub type InlineParser = @talcparsec.StringParser[Inline]
@@ -60,9 +62,8 @@ let link_url : SParser = @talcparsec.char('(')
 
 ///|
 fn link() -> InlineParser {
-  let not_bracket = @talcparsec.char(']').not_followed_by(delim_char(']'))
   @talcparsec.char('[')
-  .then(not_bracket.then(inline()).some())
+  .then(delim(']').then(inline()).some())
   .skip(@talcparsec.char(']'))
   .bind(text => link_url.map(url => Link(text, url)))
 }
@@ -76,18 +77,16 @@ let image : InlineParser = @talcparsec.char('!')
 
 ///|
 fn strong() -> InlineParser {
-  let not_star = @talcparsec.char('*').not_followed_by(delim_char('*'))
   @talcparsec.char('*')
-  .then(not_star.then(inline()).some())
+  .then(delim('*').then(inline()).some())
   .skip(@talcparsec.char('*'))
   .map(c => Strong(c))
 }
 
 ///|
 fn emph() -> InlineParser {
-  let not_uscore = @talcparsec.char('_').not_followed_by(delim_char('_'))
   @talcparsec.char('_')
-  .then(not_uscore.then(inline()).some())
+  .then(delim('_').then(inline()).some())
   .skip(@talcparsec.char('_'))
   .map(c => Emph(c))
 }
@@ -141,9 +140,9 @@ let thematic_break : BlockParser = @talcparsec.string("---")
 let heading : BlockParser = @talcparsec.char('#')
   .some()
   .bind(hashes => {
-    @talcparsec.char(' ').bind(_ => {
+    @talcparsec.space.bind(_ => {
       @talcparsec.Parser::new(input => {
-        @talcparsec.many_chars(@talcparsec.none_of("\n"))
+        @talcparsec.many_chars(@talcparsec.not_newline)
         .run(input)
         .bind(pair => {
           let (text, rest) = pair
@@ -156,14 +155,14 @@ let heading : BlockParser = @talcparsec.char('#')
   })
 
 ///|
-let rest_of_line : SParser = @talcparsec.many_chars(@talcparsec.none_of("\n")).bind(content => {
+let rest_of_line : SParser = @talcparsec.many_chars(@talcparsec.not_newline).bind(content => {
     @talcparsec.char('\n').map(_ => content + "\n")
   },
 )
 
 ///|
 let fenced_code : BlockParser = {
-  let not_nl = @talcparsec.satisfy("not newline", c => c != '\n')
+  let not_nl = @talcparsec.not_newline
   @talcparsec.string("```")
   .then(@talcparsec.many_chars1(not_nl).optional())
   .skip(@talcparsec.char('\n'))
@@ -178,7 +177,7 @@ let fenced_code : BlockParser = {
 ///|
 /// Quote
 let quoted_line : SParser = @talcparsec.char('>')
-  .then(@talcparsec.char(' ').optional())
+  .then(@talcparsec.space.optional())
   .then(rest_of_line)
 
 ///|
@@ -199,16 +198,12 @@ fn blockquote() -> BlockParser {
 /// Paragraph
 let paragraph_line : SParser = blank_line
   .not_followed_by("blank line")
-  .then(@talcparsec.char('#').not_followed_by("'#'"))
+  .then(delim('#'))
   .then(@talcparsec.string("---").not_followed_by("\"---\""))
   .then(@talcparsec.string("```").not_followed_by("\"```\""))
-  .then(@talcparsec.char('>').not_followed_by("'>'"))
-  .then(
-    @talcparsec.char('-').then(@talcparsec.char(' ')).not_followed_by("'- '"),
-  )
-  .then(
-    @talcparsec.char('+').then(@talcparsec.char(' ')).not_followed_by("'+ '"),
-  )
+  .then(delim('>'))
+  .then(@talcparsec.char('-').then(@talcparsec.space).not_followed_by("'- '"))
+  .then(@talcparsec.char('+').then(@talcparsec.space).not_followed_by("'+ '"))
   .then(rest_of_line)
 
 ///|
@@ -230,10 +225,10 @@ fn list_item(
   let istr = String::repeat(" ", indent)
   @talcparsec.string(istr)
   .then(@talcparsec.char(marker))
-  .skip(@talcparsec.char(' '))
+  .skip(@talcparsec.space)
   .bind(_ => {
     @talcparsec.Parser::new(input => {
-      match @talcparsec.many_chars(@talcparsec.none_of("\n")).run(input) {
+      match @talcparsec.many_chars(@talcparsec.not_newline).run(input) {
         Ok((text, rest)) =>
           match parse_inlines(text) {
             Ok(content) =>
@@ -347,13 +342,15 @@ test "full document" {
         Plain("."),
       ]),
       ThematicBreak,
-      Blockquote([Paragraph([
-        Plain("A "),
-        Strong([Plain("quote")]),
-        Plain(" with "),
-        Code("code"),
-        Plain("\nin two lines"),
-      ])]),
+      Blockquote([
+        Paragraph([
+          Plain("A "),
+          Strong([Plain("quote")]),
+          Plain(" with "),
+          Code("code"),
+          Plain("\nin two lines"),
+        ]),
+      ]),
       FencedCode(Some("python"), "print(\"hello\")\n"),
       UnorderedList([
         { content: [Plain("first item")], children: [] },

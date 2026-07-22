@@ -32,26 +32,6 @@ pub fn Input::new(source : String) -> Input {
 }
 
 ///|
-pub fn Input::source(self : Input) -> String {
-  self.source
-}
-
-///|
-pub fn Input::offset(self : Input) -> Int {
-  self.offset
-}
-
-///|
-pub fn Input::line(self : Input) -> Int {
-  self.line
-}
-
-///|
-pub fn Input::column(self : Input) -> Int {
-  self.column
-}
-
-///|
 pub fn Input::is_eof(self : Input) -> Bool {
   self.offset >= self.source.length()
 }
@@ -118,6 +98,17 @@ pub impl Cursor for Input with fn is_at_eof(self) {
 }
 
 ///|
+/// Checks whether the cursor has the same position as `other`.
+///
+/// Parameters:
+///
+/// * `self` : The current cursor.
+/// * `other` : Another cursor to compare against.
+///
+/// Used internally by `many` and `many_until` to detect parsers
+/// that accepted empty input.
+///
+/// Returns `true` if both cursors are at the same position.
 impl Cursor with fn same_cursor(self, other) {
   self.cursor() == other.cursor()
 }

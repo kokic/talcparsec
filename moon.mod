@@ -8,7 +8,7 @@ repository = "https://github.com/kokic/talcparsec"
 
 license = "AGPL-3.0"
 
-keywords = [ ]
+keywords = [ "parser", "parsec", "combinator", "pratt" ]
 
 description = ""
 

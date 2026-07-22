@@ -1,7 +1,18 @@
 ///|
+/// Convenience alias for `Parser[Input, T]`, used for string-input parsers.
 pub type StringParser[T] = Parser[Input, T]
 
 ///|
+/// Maps a `char` parser's result to a `String` before applying `f`.
+///
+/// Parameters:
+///
+/// * `self` : A parser that yields a single `Char`.
+/// * `f` : A function from `String` to the desired result type.
+///
+/// Returns a parser that yields the result of `f` applied to
+/// the string representation of the matched character.
+#inline
 pub fn[U] Parser::string_map(
   self : Parser[Input, Char],
   f : (String) -> U,
@@ -10,23 +21,32 @@ pub fn[U] Parser::string_map(
 }
 
 ///|
+/// Zero or more repetitions of a char parser, collecting results
+/// into a `String`.
+///
+/// Parameters:
+///
+/// * `parser` : A char parser to repeat.
+///
+/// Unlike `take_while`, succeeds on zero matches (returns empty string).
+/// Stops on non-committed failure.
+///
+/// Returns a parser that yields the collected characters as a `String`.
 pub fn many_chars(parser : Parser[Input, Char]) -> Parser[Input, String] {
-  Parser::new(input => {
-    let chars = Array::new()
-    for rest = input {
-      match parser.run(rest) {
-        Ok((ch, next)) => {
-          chars.push(ch)
-          continue next
-        }
-        Err(error) =>
-          break error.reject_if_committed(String::from_array(chars), rest)
-      }
-    }
-  })
+  parser.many().map(chars => String::from_array(chars))
 }
 
 ///|
+/// One or more repetitions of a char parser, collecting results
+/// into a `String`.
+///
+/// Parameters:
+///
+/// * `parser` : A char parser to repeat. Must match at least once.
+///
+/// Fails on zero matches.
+/// Returns a parser that yields the collected characters as a `String`.
+#inline
 pub fn many_chars1(parser : Parser[Input, Char]) -> Parser[Input, String] {
-  parser.bind(head => many_chars(parser).map(tail => head.to_string() + tail))
+  parser.some().map(chars => String::from_array(chars))
 }

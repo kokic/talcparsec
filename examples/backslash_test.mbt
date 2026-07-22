@@ -15,13 +15,11 @@ enum TexNode {
 } derive(Eq, Debug)
 
 ///|
-fn tex_comment_parser() -> @talcparsec.StringParser[TexNode] {
-  @talcparsec.char('%')
-  .then(
-    @talcparsec.none_of("\n").many().map(chars => String::from_array(chars)),
+let tex_comment_parser : @talcparsec.StringParser[TexNode] = @talcparsec.char(
+    '%',
   )
+  .then(@talcparsec.many_chars(@talcparsec.not_newline))
   .map(text => Comment(text))
-}
 
 ///|
 fn tex_verbatim_parser() -> @talcparsec.StringParser[TexNode] {
@@ -42,7 +40,7 @@ fn tex_verbatim_parser() -> @talcparsec.StringParser[TexNode] {
 
 ///|
 fn tex_math_node_parser() -> @talcparsec.StringParser[TexNode] {
-  tex_comment_parser()
+  tex_comment_parser
   .or(tex_verbatim_parser().attempt())
   .or(tex_environment_parser().attempt())
   .or(tex_escaped_special_parser().attempt())
@@ -117,7 +115,7 @@ fn tex_command_detached_arg() -> @talcparsec.StringParser[TexNode] {
 
 ///|
 fn tex_cmd_spaces() -> @talcparsec.StringParser[Unit] {
-  @talcparsec.char(' ').many().map(_ => ())
+  @talcparsec.space.many().map(_ => ())
 }
 
 ///|
@@ -196,7 +194,7 @@ fn tex_env_body(name : String) -> @talcparsec.StringParser[Array[TexNode]] {
   @talcparsec.Parser::new(input => {
     let values = Array::new(capacity=4)
     for current = input {
-      match @talcparsec.string("\\end{" + name + "}").run(current) {
+      match @talcparsec.string("\\end{\{name}}").run(current) {
         Ok((_, rest)) => break Ok((values, rest))
         Err(_) =>
           match tex_node_parser().run(current) {
@@ -255,7 +253,7 @@ fn tex_text_parser() -> @talcparsec.StringParser[TexNode] {
 
 ///|
 fn tex_node_parser() -> @talcparsec.StringParser[TexNode] {
-  tex_comment_parser()
+  tex_comment_parser
   .or(tex_verbatim_parser().attempt())
   .or(tex_math_parser())
   .or(tex_environment_parser().attempt())

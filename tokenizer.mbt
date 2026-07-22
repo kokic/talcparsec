@@ -52,6 +52,9 @@ pub fn none_of(chars : String) -> Parser[Input, Char] {
 }
 
 ///|
+pub let not_newline : StringParser[Char] = satisfy("not newline", c => c != '\n')
+
+///|
 pub fn string(expected : String) -> Parser[Input, String] {
   Parser::new(input => {
     if input.remaining().has_prefix(expected.to_string_view()) {
@@ -106,3 +109,6 @@ pub fn whitespace() -> Parser[Input, Char] {
 pub fn spaces() -> Parser[Input, Array[Char]] {
   whitespace().many()
 }
+
+///|
+pub let space : StringParser[Char] = char(' ')
