@@ -31,78 +31,83 @@ struct MdListItem {
 pub let special_chars = "]*_`[!\\"
 
 ///|
-pub fn delim(c : Char) -> @talcparsec.StringParser[Unit] {
-  @talcparsec.char(c).not_followed_by("'\{c}'")
+pub fn delim(c : Char) -> @talc.StringParser[Unit] {
+  @talc.char(c).not_followed_by("'\{c}'")
 }
 
 ///|
-pub type InlineParser = @talcparsec.StringParser[Inline]
+pub type InlineParser = @talc.StringParser[Inline]
 
 ///|
-pub type BlockParser = @talcparsec.StringParser[Block]
+pub type BlockParser = @talc.StringParser[Block]
 
 ///|
-pub type SParser = @talcparsec.StringParser[String]
+pub type SParser = @talc.StringParser[String]
 
 ///|
-let escaped : InlineParser = @talcparsec.char('\\')
-  .then(@talcparsec.one_of(special_chars))
+let open_bracket : @talc.StringParser[Char] = @talc.char('[')
+
+///|
+let close_bracket : @talc.StringParser[Char] = @talc.char(']')
+
+///|
+let escaped : InlineParser = @talc.char('\\')
+  .then(@talc.one_of(special_chars))
   .map(c => Plain(c.to_string()))
 
 ///|
-let code_span : InlineParser = @talcparsec.char('`')
-  .then(@talcparsec.many_chars(@talcparsec.none_of("`")))
-  .skip(@talcparsec.char('`'))
+let code_span : InlineParser = @talc.char('`')
+  .then(@talc.many_chars(@talc.none_of("`")))
+  .skip(@talc.char('`'))
   .map(c => Code(c))
 
 ///|
-let link_url : SParser = @talcparsec.char('(')
-  .then(@talcparsec.many_chars(@talcparsec.none_of(")")))
-  .skip(@talcparsec.char(')'))
+let link_url : SParser = @talc.char('(')
+  .then(@talc.many_chars(@talc.none_of(")")))
+  .skip(@talc.char(')'))
 
 ///|
 fn link() -> InlineParser {
-  @talcparsec.char('[')
+  open_bracket
   .then(delim(']').then(inline()).some())
-  .skip(@talcparsec.char(']'))
+  .skip(close_bracket)
   .bind(text => link_url.map(url => Link(text, url)))
 }
 
 ///|
-let image : InlineParser = @talcparsec.char('!')
-  .then(@talcparsec.char('['))
-  .then(@talcparsec.many_chars(@talcparsec.none_of("]")))
-  .skip(@talcparsec.char(']'))
+let image : InlineParser = @talc.char('!')
+  .then(open_bracket)
+  .then(@talc.many_chars(@talc.none_of("]")))
+  .skip(close_bracket)
   .bind(alt => link_url.map(url => Image(alt, url)))
 
 ///|
 fn strong() -> InlineParser {
-  @talcparsec.char('*')
-  .then(delim('*').then(inline()).some())
-  .skip(@talcparsec.char('*'))
-  .map(c => Strong(c))
+  let star = @talc.char('*')
+  star.then(delim('*').then(inline()).some()).skip(star).map(c => Strong(c))
 }
 
 ///|
 fn emph() -> InlineParser {
-  @talcparsec.char('_')
+  let underline = @talc.char('_')
+  underline
   .then(delim('_').then(inline()).some())
-  .skip(@talcparsec.char('_'))
+  .skip(underline)
   .map(c => Emph(c))
 }
 
 ///|
 let plain_char : InlineParser = {
-  let non_special = @talcparsec.none_of(special_chars)
+  let non_special = @talc.none_of(special_chars)
   non_special.bind(c => {
-    @talcparsec.many_chars(non_special).map(rest => Plain(c.to_string() + rest))
+    @talc.many_chars(non_special).map(rest => Plain("\{c}\{rest}"))
   })
 }
 
 ///|
 fn inline() -> InlineParser {
-  @talcparsec.delay(() => {
-    @talcparsec.choice([
+  @talc.delay(() => {
+    @talc.choice([
       escaped,
       image,
       link(),
@@ -115,34 +120,31 @@ fn inline() -> InlineParser {
 }
 
 ///|
-fn parse_inlines(
-  text : String,
-) -> Result[Array[Inline], @talcparsec.ParseError] {
-  inline().some().parse(@talcparsec.Input::new(text))
+fn parse_inlines(text : String) -> Result[Array[Inline], @talc.ParseError] {
+  inline().some().parse(@talc.Input::new(text))
 }
 
 ///|
-/// Block parsers
-let blank_line : @talcparsec.StringParser[Unit] = {
-  let ws_no_nl = @talcparsec.satisfy("non-nl whitespace", c => {
+let blank_line : @talc.StringParser[Unit] = {
+  let ws_no_nl = @talc.satisfy("non-newline whitespace", c => {
     Char::is_whitespace(c) && c != '\n'
   })
-  @talcparsec.many_chars(ws_no_nl).skip(@talcparsec.char('\n')).map(_ => ())
+  @talc.many_chars(ws_no_nl).skip(@talc.newline).map(_ => ())
 }
 
 ///|
-let thematic_break : BlockParser = @talcparsec.string("---")
-  .then(@talcparsec.char('-').many())
-  .skip(@talcparsec.char('\n'))
+let thematic_break : BlockParser = @talc.string("---")
+  .then(@talc.char('-').many())
+  .skip(@talc.newline)
   .map(_ => ThematicBreak)
 
 ///|
-let heading : BlockParser = @talcparsec.char('#')
+let heading : BlockParser = @talc.char('#')
   .some()
   .bind(hashes => {
-    @talcparsec.space.bind(_ => {
-      @talcparsec.Parser::new(input => {
-        @talcparsec.many_chars(@talcparsec.not_newline)
+    @talc.space.bind(_ => {
+      @talc.Parser::new(input => {
+        @talc.line_content
         .run(input)
         .bind(pair => {
           let (text, rest) = pair
@@ -155,20 +157,14 @@ let heading : BlockParser = @talcparsec.char('#')
   })
 
 ///|
-let rest_of_line : SParser = @talcparsec.many_chars(@talcparsec.not_newline).bind(content => {
-    @talcparsec.char('\n').map(_ => content + "\n")
-  },
-)
-
-///|
 let fenced_code : BlockParser = {
-  let not_nl = @talcparsec.not_newline
-  @talcparsec.string("```")
-  .then(@talcparsec.many_chars1(not_nl).optional())
-  .skip(@talcparsec.char('\n'))
+  let not_nl = @talc.not_newline
+  @talc.string("```")
+  .then(@talc.many_chars1(not_nl).optional())
+  .skip(@talc.newline)
   .bind(lang => {
-    let terminator = @talcparsec.string("```").skip(@talcparsec.char('\n'))
-    rest_of_line
+    let terminator = @talc.string("```").skip(@talc.newline)
+    @talc.rest_of_line
     .many_until(terminator)
     .map(lines => FencedCode(lang, lines.join("")))
   })
@@ -176,19 +172,19 @@ let fenced_code : BlockParser = {
 
 ///|
 /// Quote
-let quoted_line : SParser = @talcparsec.char('>')
-  .then(@talcparsec.space.optional())
-  .then(rest_of_line)
+let quoted_line : SParser = @talc.char('>')
+  .then(@talc.space.optional())
+  .then(@talc.rest_of_line)
 
 ///|
 fn blockquote() -> BlockParser {
   quoted_line
   .some()
   .bind(lines => {
-    @talcparsec.Parser::new(input => {
+    @talc.Parser::new(input => {
       block()
       .some()
-      .parse(@talcparsec.Input::new(lines.join("")))
+      .parse(@talc.Input::new(lines.join("")))
       .map(blocks => (Blockquote(blocks), input))
     })
   })
@@ -199,57 +195,54 @@ fn blockquote() -> BlockParser {
 let paragraph_line : SParser = blank_line
   .not_followed_by("blank line")
   .then(delim('#'))
-  .then(@talcparsec.string("---").not_followed_by("\"---\""))
-  .then(@talcparsec.string("```").not_followed_by("\"```\""))
+  .then(@talc.string("---").not_followed_by("\"---\""))
+  .then(@talc.string("```").not_followed_by("\"```\""))
   .then(delim('>'))
-  .then(@talcparsec.char('-').then(@talcparsec.space).not_followed_by("'- '"))
-  .then(@talcparsec.char('+').then(@talcparsec.space).not_followed_by("'+ '"))
-  .then(rest_of_line)
+  .then(@talc.char('-').then(@talc.space).not_followed_by("'- '"))
+  .then(@talc.char('+').then(@talc.space).not_followed_by("'+ '"))
+  .then(@talc.rest_of_line)
 
 ///|
 let paragraph : BlockParser = paragraph_line
   .some()
   .bind(lines => {
     let text = lines.join("").trim_end().to_owned()
-    @talcparsec.Parser::new(input => {
+    @talc.Parser::new(input => {
       parse_inlines(text).map(inlines => (Paragraph(inlines), input))
     })
   })
 
 ///|
 /// Lists
-fn list_item(
-  marker : Char,
-  indent : Int,
-) -> @talcparsec.StringParser[MdListItem] {
+fn list_item(marker : Char, indent : Int) -> @talc.StringParser[MdListItem] {
   let istr = String::repeat(" ", indent)
-  @talcparsec.string(istr)
-  .then(@talcparsec.char(marker))
-  .skip(@talcparsec.space)
+  @talc.string(istr)
+  .then(@talc.char(marker))
+  .skip(@talc.space)
   .bind(_ => {
-    @talcparsec.Parser::new(input => {
-      match @talcparsec.many_chars(@talcparsec.not_newline).run(input) {
+    @talc.Parser::new(input => {
+      match @talc.line_content.run(input) {
         Ok((text, rest)) =>
           match parse_inlines(text) {
-            Ok(content) =>
-              match @talcparsec.char('\n').run(rest) {
+            Ok(content) => {
+              let subitems = sub_list(indent + 2).many()
+              match @talc.newline.run(rest) {
                 Ok((_, after_nl)) =>
-                  sub_list(indent + 2)
-                  .many()
+                  subitems
                   .run(after_nl)
                   .map(pair => {
                     let (children, rest2) = pair
                     ({ content, children }, rest2)
                   })
                 Err(_) =>
-                  sub_list(indent + 2)
-                  .many()
+                  subitems
                   .run(rest)
                   .map(pair => {
                     let (children, rest2) = pair
                     ({ content, children }, rest2)
                   })
               }
+            }
             Err(e) => Err(e)
           }
         Err(e) => Err(e)
@@ -270,7 +263,7 @@ fn ordered_list_at(indent : Int) -> BlockParser {
 
 ///|
 fn sub_list(indent : Int) -> BlockParser {
-  @talcparsec.choice([unordered_list_at(indent), ordered_list_at(indent)])
+  @talc.choice([unordered_list_at(indent), ordered_list_at(indent)])
 }
 
 ///|
@@ -282,7 +275,7 @@ let ordered_list : BlockParser = ordered_list_at(0)
 ///|
 /// Document
 fn block() -> BlockParser {
-  @talcparsec.choice([
+  @talc.choice([
     thematic_break,
     heading,
     fenced_code,
@@ -294,14 +287,16 @@ fn block() -> BlockParser {
 }
 
 ///|
-let block_sep : @talcparsec.StringParser[Array[Unit]] = blank_line.some()
+let block_sep : @talc.StringParser[Array[Unit]] = blank_line.some()
 
 ///|
-let document : @talcparsec.StringParser[Array[Block]] = blank_line
-  .many()
+let blanks : @talc.StringParser[Array[Unit]] = blank_line.many()
+
+///|
+let document : @talc.StringParser[Array[Block]] = blanks
   .then(block().sep_by(block_sep))
-  .skip(blank_line.many())
-  .skip(@talcparsec.eof())
+  .skip(blanks)
+  .skip(@talc.eof())
 
 ///|
 test "full document" {
@@ -325,7 +320,7 @@ test "full document" {
     #|  - another sub
     #|
   @test.assert_eq(
-    document.parse(@talcparsec.Input::new(markdown)),
+    document.parse(@talc.Input::new(markdown)),
     Ok([
       Heading(1, [Plain("Title")]),
       Paragraph([
@@ -370,12 +365,9 @@ test "full document" {
 
 ///|
 test "escaped character" {
-  @test.assert_eq(escaped.parse(@talcparsec.Input::new("\\*")), Ok(Plain("*")))
-  @test.assert_eq(
-    escaped.parse(@talcparsec.Input::new("\\\\")),
-    Ok(Plain("\\")),
-  )
-  match escaped.parse(@talcparsec.Input::new("\\a")) {
+  @test.assert_eq(escaped.parse(@talc.Input::new("\\*")), Ok(Plain("*")))
+  @test.assert_eq(escaped.parse(@talc.Input::new("\\\\")), Ok(Plain("\\")))
+  match escaped.parse(@talc.Input::new("\\a")) {
     Err(_) => ()
     Ok(_) => @test.fail("expected fail on non-special char")
   }
@@ -383,25 +375,22 @@ test "escaped character" {
 
 ///|
 test "code span" {
-  @test.assert_eq(
-    code_span.parse(@talcparsec.Input::new("`code`")),
-    Ok(Code("code")),
-  )
-  @test.assert_eq(code_span.parse(@talcparsec.Input::new("``")), Ok(Code("")))
+  @test.assert_eq(code_span.parse(@talc.Input::new("`code`")), Ok(Code("code")))
+  @test.assert_eq(code_span.parse(@talc.Input::new("``")), Ok(Code("")))
 }
 
 ///|
 test "strong and emph" {
   @test.assert_eq(
-    strong().parse(@talcparsec.Input::new("*bold*")),
+    strong().parse(@talc.Input::new("*bold*")),
     Ok(Strong([Plain("bold")])),
   )
   @test.assert_eq(
-    emph().parse(@talcparsec.Input::new("_italic_")),
+    emph().parse(@talc.Input::new("_italic_")),
     Ok(Emph([Plain("italic")])),
   )
   @test.assert_eq(
-    strong().parse(@talcparsec.Input::new("*bold _and_ italic*")),
+    strong().parse(@talc.Input::new("*bold _and_ italic*")),
     Ok(Strong([Plain("bold "), Emph([Plain("and")]), Plain(" italic")])),
   )
 }
@@ -409,11 +398,11 @@ test "strong and emph" {
 ///|
 test "link and image" {
   @test.assert_eq(
-    link().parse(@talcparsec.Input::new("[text](url)")),
+    link().parse(@talc.Input::new("[text](url)")),
     Ok(Link([Plain("text")], "url")),
   )
   @test.assert_eq(
-    image.parse(@talcparsec.Input::new("![alt](img.png)")),
+    image.parse(@talc.Input::new("![alt](img.png)")),
     Ok(Image("alt", "img.png")),
   )
 }
@@ -434,11 +423,11 @@ test "inline plain text and mixed" {
 ///|
 test "thematic break" {
   @test.assert_eq(
-    thematic_break.parse(@talcparsec.Input::new("---\n")),
+    thematic_break.parse(@talc.Input::new("---\n")),
     Ok(ThematicBreak),
   )
   @test.assert_eq(
-    thematic_break.parse(@talcparsec.Input::new("--------\n")),
+    thematic_break.parse(@talc.Input::new("--------\n")),
     Ok(ThematicBreak),
   )
 }
@@ -446,15 +435,11 @@ test "thematic break" {
 ///|
 test "heading" {
   @test.assert_eq(
-    heading
-    .skip(@talcparsec.char('\n'))
-    .parse(@talcparsec.Input::new("# Title\n")),
+    heading.skip(@talc.newline).parse(@talc.Input::new("# Title\n")),
     Ok(Heading(1, [Plain("Title")])),
   )
   @test.assert_eq(
-    heading
-    .skip(@talcparsec.char('\n'))
-    .parse(@talcparsec.Input::new("### Sub *bold*\n")),
+    heading.skip(@talc.newline).parse(@talc.Input::new("### Sub *bold*\n")),
     Ok(Heading(3, [Plain("Sub "), Strong([Plain("bold")])])),
   )
 }
@@ -462,15 +447,15 @@ test "heading" {
 ///|
 test "fenced code" {
   @test.assert_eq(
-    fenced_code.parse(@talcparsec.Input::new("```\ncode\n```\n")),
+    fenced_code.parse(@talc.Input::new("```\ncode\n```\n")),
     Ok(FencedCode(None, "code\n")),
   )
   @test.assert_eq(
-    fenced_code.parse(@talcparsec.Input::new("```\nline1\nline2\n```\n")),
+    fenced_code.parse(@talc.Input::new("```\nline1\nline2\n```\n")),
     Ok(FencedCode(None, "line1\nline2\n")),
   )
   @test.assert_eq(
-    fenced_code.parse(@talcparsec.Input::new("```rust\nfn main() {}\n```\n")),
+    fenced_code.parse(@talc.Input::new("```rust\nfn main() {}\n```\n")),
     Ok(FencedCode(Some("rust"), "fn main() {}\n")),
   )
 }
@@ -478,11 +463,11 @@ test "fenced code" {
 ///|
 test "paragraph" {
   @test.assert_eq(
-    paragraph.parse(@talcparsec.Input::new("hello world\n")),
+    paragraph.parse(@talc.Input::new("hello world\n")),
     Ok(Paragraph([Plain("hello world")])),
   )
   @test.assert_eq(
-    paragraph.parse(@talcparsec.Input::new("hello *world* ok\n")),
+    paragraph.parse(@talc.Input::new("hello *world* ok\n")),
     Ok(Paragraph([Plain("hello "), Strong([Plain("world")]), Plain(" ok")])),
   )
 }
@@ -490,7 +475,7 @@ test "paragraph" {
 ///|
 test "blockquote" {
   @test.assert_eq(
-    blockquote().parse(@talcparsec.Input::new("> hello\n> *world*\n")),
+    blockquote().parse(@talc.Input::new("> hello\n> *world*\n")),
     Ok(Blockquote([Paragraph([Plain("hello\n"), Strong([Plain("world")])])])),
   )
 }
@@ -498,7 +483,7 @@ test "blockquote" {
 ///|
 test "unordered list" {
   @test.assert_eq(
-    unordered_list.parse(@talcparsec.Input::new("- one\n- two\n")),
+    unordered_list.parse(@talc.Input::new("- one\n- two\n")),
     Ok(
       UnorderedList([
         { content: [Plain("one")], children: [] },
@@ -511,7 +496,7 @@ test "unordered list" {
 ///|
 test "ordered list" {
   @test.assert_eq(
-    ordered_list.parse(@talcparsec.Input::new("+ first\n+ second\n")),
+    ordered_list.parse(@talc.Input::new("+ first\n+ second\n")),
     Ok(
       OrderedList([
         { content: [Plain("first")], children: [] },
@@ -524,7 +509,7 @@ test "ordered list" {
 ///|
 test "nested list" {
   @test.assert_eq(
-    unordered_list.parse(@talcparsec.Input::new("- a\n  - b\n  - c\n")),
+    unordered_list.parse(@talc.Input::new("- a\n  - b\n  - c\n")),
     Ok(
       UnorderedList([
         {
@@ -545,7 +530,7 @@ test "nested list" {
 test "document with fenced code and blockquote" {
   let md = "> quote\n\n```\ncode\n```\n"
   @test.assert_eq(
-    document.parse(@talcparsec.Input::new(md)),
+    document.parse(@talc.Input::new(md)),
     Ok([Blockquote([Paragraph([Plain("quote")])]), FencedCode(None, "code\n")]),
   )
 }
@@ -554,7 +539,7 @@ test "document with fenced code and blockquote" {
 test "document with thematic break" {
   let md = "a\n\n---\n\nb\n"
   @test.assert_eq(
-    document.parse(@talcparsec.Input::new(md)),
+    document.parse(@talc.Input::new(md)),
     Ok([Paragraph([Plain("a")]), ThematicBreak, Paragraph([Plain("b")])]),
   )
 }

@@ -3,6 +3,12 @@
 pub type StringParser[T] = Parser[Input, T]
 
 ///|
+pub type CParser = StringParser[Char]
+
+///|
+pub type SParser = StringParser[String]
+
+///|
 /// Maps a `char` parser's result to a `String` before applying `f`.
 ///
 /// Parameters:

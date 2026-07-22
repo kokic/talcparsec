@@ -1,4 +1,22 @@
 ///|
+pub let space : CParser = char(' ')
+
+///|
+pub let newline : CParser = char('\n')
+
+///|
+pub let not_newline : CParser = satisfy("not newline", c => c != '\n')
+
+///|
+pub let line_content : SParser = many_chars(not_newline)
+
+///|
+pub let with_line : (String) -> SParser = c => newline.map(_ => "\{c}\n")
+
+///|
+pub let rest_of_line : SParser = line_content.bind(with_line)
+
+///|
 pub fn[I : Cursor] eof() -> Parser[I, Unit] {
   Parser::new(input => {
     if input.is_at_eof() {
@@ -50,9 +68,6 @@ pub fn one_of(chars : String) -> Parser[Input, Char] {
 pub fn none_of(chars : String) -> Parser[Input, Char] {
   satisfy("none of " + chars, ch => !chars.contains_char(ch))
 }
-
-///|
-pub let not_newline : StringParser[Char] = satisfy("not newline", c => c != '\n')
 
 ///|
 pub fn string(expected : String) -> Parser[Input, String] {
@@ -109,6 +124,3 @@ pub fn whitespace() -> Parser[Input, Char] {
 pub fn spaces() -> Parser[Input, Array[Char]] {
   whitespace().many()
 }
-
-///|
-pub let space : StringParser[Char] = char(' ')
