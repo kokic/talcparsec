@@ -111,7 +111,7 @@ pub fn[I, T] Parser::or(
         if first.committed {
           Err(first)
         } else {
-          other.run(input).map_err(second => first.merge(second))
+          other.run(input).map_err(second => CanMerge::merge(first, second))
         }
     }
   })
@@ -293,6 +293,7 @@ pub fn[I : Cursor, T] Parser::not_followed_by(
   })
 }
 
+///|
 fn[I : Cursor, T] choice_impl(
   parsers : Array[Parser[I, T]],
   idx : Int,
@@ -305,7 +306,9 @@ fn[I : Cursor, T] choice_impl(
     Ok(result) => Ok(result)
     Err(error) => {
       guard !error.committed else { Err(error) }
-      choice_impl(parsers, idx + 1, input).map_err(e => error.merge(e))
+      choice_impl(parsers, idx + 1, input).map_err(e => {
+        CanMerge::merge(error, e)
+      })
     }
   }
 }
