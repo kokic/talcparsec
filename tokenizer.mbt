@@ -11,9 +11,14 @@ pub let not_newline : CParser = satisfy("not newline", c => c != '\n')
 pub let line_content : SParser = many_chars(not_newline)
 
 ///|
+/// Maps content `c` to a parser that consumes a newline and returns `c` +
+/// a newline character.
 pub let with_line : (String) -> SParser = c => newline.map(_ => "\{c}\n")
 
 ///|
+/// Consumes all non-newline characters, then consumes the trailing newline.
+///
+/// Returns the matched line content including the newline terminator.
 pub let rest_of_line : SParser = line_content.bind(with_line)
 
 ///|
