@@ -17,13 +17,13 @@ pub fn[I : Cursor, T] Parser::many(self : Parser[I, T]) -> Parser[I, Array[T]] {
         Ok((value, next)) =>
           if next.same_cursor(rest) {
             break Err(
-              ParseError::message(rest, "many parser accepted empty input"),
+              ParseFailure::message(rest, "many parser accepted empty input"),
             )
           } else {
             values.push(value)
             continue next
           }
-        Err(error) => break error.reject_if_committed(values, rest)
+        Err(error) => break Commit::reject_if_committed(error, values, rest)
       }
     }
   })
@@ -116,7 +116,7 @@ pub fn[I : Cursor, T, U] Parser::many_until(
             Ok((value, next)) => {
               if next.same_cursor(rest) {
                 break Err(
-                  ParseError::message(
+                  ParseFailure::message(
                     rest, "many_until parser accepted empty input",
                   ),
                 )
@@ -124,7 +124,7 @@ pub fn[I : Cursor, T, U] Parser::many_until(
               values.push(value)
               continue next
             }
-            Err(error) => break error.reject_if_committed(values, rest)
+            Err(error) => break Commit::reject_if_committed(error, values, rest)
           }
       }
     }

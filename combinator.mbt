@@ -29,7 +29,7 @@ pub fn[I : Cursor, T, U] Parser::bind(
       .run(rest)
       .map_err(error => {
         guard rest.cursor() != input.cursor() else { error }
-        error.with_commit()
+        Commit::mark_committed(error)
       })
     })
   })
@@ -108,7 +108,7 @@ pub fn[I, T] Parser::or(
     match self.run(input) {
       Ok((value, rest)) => Ok((value, rest))
       Err(first) =>
-        if first.committed {
+        if Commit::is_committed(first) {
           Err(first)
         } else {
           other.run(input).map_err(second => CanMerge::merge(first, second))
@@ -129,7 +129,9 @@ pub fn[I, T] Parser::or(
 /// distinguishable without backtracking.
 #inline
 pub fn[I, T] Parser::attempt(self : Parser[I, T]) -> Parser[I, T] {
-  Parser::new(input => self.run(input).map_err(error => error.without_commit()))
+  Parser::new(input => {
+    self.run(input).map_err(error => Commit::clear_commit(error))
+  })
 }
 
 ///|
@@ -145,7 +147,7 @@ pub fn[I, T] Parser::optional(self : Parser[I, T]) -> Parser[I, T?] {
   Parser::new(input => {
     match self.run(input) {
       Ok((value, rest)) => Ok((Some(value), rest))
-      Err(error) => error.reject_if_committed(None, input)
+      Err(error) => Commit::reject_if_committed(error, None, input)
     }
   })
 }
@@ -169,8 +171,8 @@ pub fn[I : Cursor, T] Parser::label(
     self
     .run(input)
     .map_err(error => {
-      guard error.offset == input.cursor() else { error }
-      ParseError::new(input, expected)
+      guard Positioned::error_offset(error) == input.cursor() else { error }
+      ParseFailure::signal(input, expected)
     })
   })
 }
@@ -287,7 +289,7 @@ pub fn[I : Cursor, T] Parser::not_followed_by(
 ) -> Parser[I, Unit] {
   Parser::new(input => {
     match self.run(input) {
-      Ok(_) => Err(ParseError::message(input, "unexpected " + label))
+      Ok(_) => Err(ParseFailure::message(input, "unexpected " + label))
       Err(_) => Ok(((), input))
     }
   })
@@ -300,12 +302,12 @@ fn[I : Cursor, T] choice_impl(
   input : I,
 ) -> Result[(T, I), ParseError] {
   guard idx < parsers.length() else {
-    Err(ParseError::message(input, "empty choice"))
+    Err(ParseFailure::message(input, "empty choice"))
   }
   match parsers[idx].run(input) {
     Ok(result) => Ok(result)
     Err(error) => {
-      guard !error.committed else { Err(error) }
+      guard !Commit::is_committed(error) else { Err(error) }
       choice_impl(parsers, idx + 1, input).map_err(e => {
         CanMerge::merge(error, e)
       })

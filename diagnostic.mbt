@@ -5,6 +5,10 @@ pub(open) trait Commit {
   fn is_committed(Self) -> Bool
   fn mark_committed(Self) -> Self
   fn clear_commit(Self) -> Self
+  fn[I, T] reject_if_committed(Self, value : T, rest : I) -> Result[
+    (T, I),
+    Self,
+  ]
 }
 
 ///|
@@ -20,6 +24,14 @@ pub(open) trait Positioned {
   fn error_offset(Self) -> Int
   fn error_line(Self) -> Int
   fn error_column(Self) -> Int
+}
+
+///|
+/// Full parsing failure contract. Combines commit tracking, error merging,
+/// source positioning, and construction from a cursor.
+pub(open) trait ParseFailure: Commit + CanMerge + Positioned {
+  fn[I : Cursor] signal(input : I, expected : String) -> Self
+  fn[I : Cursor] message(input : I, msg : String) -> Self
 }
 
 ///|
@@ -58,17 +70,14 @@ pub fn[I : Cursor] ParseError::new(input : I, expected : String) -> ParseError {
 }
 
 ///|
-pub fn[I : Cursor] ParseError::message(
-  input : I,
-  message : String,
-) -> ParseError {
+pub fn[I : Cursor] ParseError::message(input : I, msg : String) -> ParseError {
   let position = input.position()
   {
     offset: position.offset,
     line: position.line,
     column: position.column,
     expected: [],
-    message,
+    message: msg,
     committed: false,
   }
 }
@@ -135,6 +144,16 @@ impl Commit for ParseError with fn clear_commit(self) {
 }
 
 ///|
+impl Commit for ParseError with fn[I, T] reject_if_committed(
+  self,
+  value : T,
+  rest : I,
+) -> Result[(T, I), ParseError] {
+  guard self.committed else { Ok((value, rest)) }
+  Err(self)
+}
+
+///|
 /// --- CanMerge impl ---
 impl CanMerge for ParseError with fn merge(self, other) {
   if self.offset > other.offset {
@@ -174,6 +193,23 @@ impl Positioned for ParseError with fn error_line(self) {
 ///|
 impl Positioned for ParseError with fn error_column(self) {
   self.column
+}
+
+///|
+/// --- ParseFailure impl ---
+impl ParseFailure for ParseError with fn[I : Cursor] signal(
+  input : I,
+  expected : String,
+) -> ParseError {
+  ParseError::new(input, expected)
+}
+
+///|
+impl ParseFailure for ParseError with fn[I : Cursor] message(
+  input : I,
+  msg : String,
+) -> ParseError {
+  ParseError::message(input, msg)
 }
 
 ///|

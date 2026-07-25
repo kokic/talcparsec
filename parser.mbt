@@ -26,7 +26,7 @@ pub fn[I : Cursor, T] Parser::parse(
   match self.run(input) {
     Ok((value, input)) => {
       guard !input.is_at_eof() else { Ok(value) }
-      Err(ParseError::new(input, "end of input"))
+      Err(ParseFailure::signal(input, "end of input"))
     }
     Err(error) => Err(error)
   }
@@ -47,7 +47,7 @@ pub fn[I, T] pure(value : T) -> Parser[I, T] {
 
 ///|
 pub fn[I : Cursor, T] fail(expected : String) -> Parser[I, T] {
-  Parser::new(input => Err(ParseError::new(input, expected)))
+  Parser::new(input => Err(ParseFailure::signal(input, expected)))
 }
 
 ///|

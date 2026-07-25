@@ -27,7 +27,7 @@ pub fn[I : Cursor] eof() -> Parser[I, Unit] {
     if input.is_at_eof() {
       Ok(((), input))
     } else {
-      Err(ParseError::new(input, "end of input"))
+      Err(ParseFailure::signal(input, "end of input"))
     }
   })
 }
@@ -44,9 +44,9 @@ pub fn[I : Cursor, T] satisfy_input(
         if predicate(token) {
           Ok((token, rest))
         } else {
-          Err(ParseError::new(input, name))
+          Err(ParseFailure::signal(input, name))
         }
-      None => Err(ParseError::new(input, name))
+      None => Err(ParseFailure::signal(input, name))
     }
   })
 }
@@ -80,7 +80,7 @@ pub fn string(expected : String) -> Parser[Input, String] {
     if input.remaining().has_prefix(expected.to_string_view()) {
       Ok((expected, input.advance_string(expected)))
     } else {
-      Err(ParseError::new(input, "\"" + expected + "\""))
+      Err(ParseFailure::signal(input, "\"" + expected + "\""))
     }
   })
 }
@@ -103,7 +103,7 @@ pub fn take_while(
       }
     }
     if chars.length() == 0 {
-      Err(ParseError::new(input, name))
+      Err(ParseFailure::signal(input, name))
     } else {
       Ok((String::from_array(chars), rest))
     }
