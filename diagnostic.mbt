@@ -129,22 +129,22 @@ pub fn ParseError::merge(self : ParseError, other : ParseError) -> ParseError {
 
 ///|
 /// --- Commit impl ---
-impl Commit for ParseError with fn is_committed(self) {
+pub impl Commit for ParseError with fn is_committed(self) {
   self.committed
 }
 
 ///|
-impl Commit for ParseError with fn mark_committed(self) {
+pub impl Commit for ParseError with fn mark_committed(self) {
   { ..self, committed: true }
 }
 
 ///|
-impl Commit for ParseError with fn clear_commit(self) {
+pub impl Commit for ParseError with fn clear_commit(self) {
   { ..self, committed: false }
 }
 
 ///|
-impl Commit for ParseError with fn[I, T] reject_if_committed(
+pub impl Commit for ParseError with fn[I, T] reject_if_committed(
   self,
   value : T,
   rest : I,
@@ -155,7 +155,7 @@ impl Commit for ParseError with fn[I, T] reject_if_committed(
 
 ///|
 /// --- CanMerge impl ---
-impl CanMerge for ParseError with fn merge(self, other) {
+pub impl CanMerge for ParseError with fn merge(self, other) {
   if self.offset > other.offset {
     self
   } else if other.offset > self.offset {
@@ -181,23 +181,23 @@ impl CanMerge for ParseError with fn merge(self, other) {
 
 ///|
 /// --- Positioned impl ---
-impl Positioned for ParseError with fn error_offset(self) {
+pub impl Positioned for ParseError with fn error_offset(self) {
   self.offset
 }
 
 ///|
-impl Positioned for ParseError with fn error_line(self) {
+pub impl Positioned for ParseError with fn error_line(self) {
   self.line
 }
 
 ///|
-impl Positioned for ParseError with fn error_column(self) {
+pub impl Positioned for ParseError with fn error_column(self) {
   self.column
 }
 
 ///|
 /// --- ParseFailure impl ---
-impl ParseFailure for ParseError with fn[I : Cursor] signal(
+pub impl ParseFailure for ParseError with fn[I : Cursor] signal(
   input : I,
   expected : String,
 ) -> ParseError {
@@ -205,7 +205,7 @@ impl ParseFailure for ParseError with fn[I : Cursor] signal(
 }
 
 ///|
-impl ParseFailure for ParseError with fn[I : Cursor] message(
+pub impl ParseFailure for ParseError with fn[I : Cursor] message(
   input : I,
   msg : String,
 ) -> ParseError {
