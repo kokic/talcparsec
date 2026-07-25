@@ -23,7 +23,7 @@ pub let rest_of_line : SParser = line_content.bind(with_line)
 
 ///|
 pub fn[I : Cursor] eof() -> Parser[I, Unit] {
-  Parser::new(input => {
+  ParserRaw::new(input => {
     if input.is_at_eof() {
       Ok(((), input))
     } else {
@@ -38,7 +38,7 @@ pub fn[I : Cursor, T] satisfy_input(
   name : String,
   predicate : (T) -> Bool,
 ) -> Parser[I, T] {
-  Parser::new(input => {
+  ParserRaw::new(input => {
     match next(input) {
       Some((token, rest)) =>
         if predicate(token) {
@@ -76,7 +76,7 @@ pub fn none_of(chars : String) -> Parser[Input, Char] {
 
 ///|
 pub fn string(expected : String) -> Parser[Input, String] {
-  Parser::new(input => {
+  ParserRaw::new(input => {
     if input.remaining().has_prefix(expected.to_string_view()) {
       Ok((expected, input.advance_string(expected)))
     } else {
@@ -90,7 +90,7 @@ pub fn take_while(
   name : String,
   predicate : (Char) -> Bool,
 ) -> Parser[Input, String] {
-  Parser::new(input => {
+  ParserRaw::new(input => {
     let chars = Array::new()
     let rest = for rest = input {
       match rest.peek() {

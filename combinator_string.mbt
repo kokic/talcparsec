@@ -10,19 +10,11 @@ pub type SParser = StringParser[String]
 
 ///|
 /// Maps a `char` parser's result to a `String` before applying `f`.
-///
-/// Parameters:
-///
-/// * `self` : A parser that yields a single `Char`.
-/// * `f` : A function from `String` to the desired result type.
-///
-/// Returns a parser that yields the result of `f` applied to
-/// the string representation of the matched character.
 #inline
-pub fn[U] Parser::string_map(
-  self : Parser[Input, Char],
+pub fn[U, E : Commit] ParserRaw::string_map(
+  self : ParserRaw[Input, Char, E],
   f : (String) -> U,
-) -> Parser[Input, U] {
+) -> ParserRaw[Input, U, E] {
   self.bind(value => pure(f(value.to_string())))
 }
 
@@ -30,15 +22,10 @@ pub fn[U] Parser::string_map(
 /// Zero or more repetitions of a char parser, collecting results
 /// into a `String`.
 ///
-/// Parameters:
-///
-/// * `parser` : A char parser to repeat.
-///
 /// Unlike `take_while`, succeeds on zero matches (returns empty string).
-/// Stops on non-committed failure.
-///
-/// Returns a parser that yields the collected characters as a `String`.
-pub fn many_chars(parser : Parser[Input, Char]) -> Parser[Input, String] {
+pub fn[E : Commit + ParseFailure] many_chars(
+  parser : ParserRaw[Input, Char, E],
+) -> ParserRaw[Input, String, E] {
   parser.many().map(chars => String::from_array(chars))
 }
 
@@ -46,13 +33,10 @@ pub fn many_chars(parser : Parser[Input, Char]) -> Parser[Input, String] {
 /// One or more repetitions of a char parser, collecting results
 /// into a `String`.
 ///
-/// Parameters:
-///
-/// * `parser` : A char parser to repeat. Must match at least once.
-///
 /// Fails on zero matches.
-/// Returns a parser that yields the collected characters as a `String`.
 #inline
-pub fn many_chars1(parser : Parser[Input, Char]) -> Parser[Input, String] {
+pub fn[E : Commit + ParseFailure] many_chars1(
+  parser : ParserRaw[Input, Char, E],
+) -> ParserRaw[Input, String, E] {
   parser.some().map(chars => String::from_array(chars))
 }

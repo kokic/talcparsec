@@ -16,11 +16,11 @@ pub fn[T] array_cons(tail : Array[T], head : T) -> Array[T] {
 /// preventing backtracking across consumed input.
 ///
 /// Returns a parser that runs `self`, then feeds its result to `next`.
-pub fn[I : Cursor, T, U] Parser::bind(
-  self : Parser[I, T],
-  next : (T) -> Parser[I, U],
-) -> Parser[I, U] {
-  Parser::new(input => {
+pub fn[I : Cursor, T, U, E : Commit] ParserRaw::bind(
+  self : ParserRaw[I, T, E],
+  next : (T) -> ParserRaw[I, U, E],
+) -> ParserRaw[I, U, E] {
+  ParserRaw::new(input => {
     self
     .run(input)
     .bind(result => {
@@ -46,10 +46,10 @@ pub fn[I : Cursor, T, U] Parser::bind(
 /// Returns a parser that parses the same input as `self`
 /// and applies `f` to the result on success.
 #inline
-pub fn[I : Cursor, T, U] Parser::map(
-  self : Parser[I, T],
+pub fn[I : Cursor, T, U, E : Commit] ParserRaw::map(
+  self : ParserRaw[I, T, E],
   f : (T) -> U,
-) -> Parser[I, U] {
+) -> ParserRaw[I, U, E] {
   self.bind(value => pure(f(value)))
 }
 
@@ -63,10 +63,10 @@ pub fn[I : Cursor, T, U] Parser::map(
 ///
 /// Equivalent to `self >> next`.
 #inline
-pub fn[I : Cursor, T, U] Parser::then(
-  self : Parser[I, T],
-  next : Parser[I, U],
-) -> Parser[I, U] {
+pub fn[I : Cursor, T, U, E : Commit] ParserRaw::then(
+  self : ParserRaw[I, T, E],
+  next : ParserRaw[I, U, E],
+) -> ParserRaw[I, U, E] {
   self.bind(_ => next)
 }
 
@@ -80,10 +80,10 @@ pub fn[I : Cursor, T, U] Parser::then(
 ///
 /// Equivalent to `self <* next`.
 #inline
-pub fn[I : Cursor, T, U] Parser::skip(
-  self : Parser[I, T],
-  next : Parser[I, U],
-) -> Parser[I, T] {
+pub fn[I : Cursor, T, U, E : Commit] ParserRaw::skip(
+  self : ParserRaw[I, T, E],
+  next : ParserRaw[I, U, E],
+) -> ParserRaw[I, T, E] {
   self.bind(value => next.map(_ => value))
 }
 
@@ -100,11 +100,11 @@ pub fn[I : Cursor, T, U] Parser::skip(
 /// Errors are merged by furthest position.
 ///
 /// Returns the result of the first successful alternative.
-pub fn[I, T] Parser::or(
-  self : Parser[I, T],
-  other : Parser[I, T],
-) -> Parser[I, T] {
-  Parser::new(input => {
+pub fn[I, T, E : Commit + CanMerge] ParserRaw::or(
+  self : ParserRaw[I, T, E],
+  other : ParserRaw[I, T, E],
+) -> ParserRaw[I, T, E] {
+  ParserRaw::new(input => {
     match self.run(input) {
       Ok((value, rest)) => Ok((value, rest))
       Err(first) =>
@@ -128,8 +128,10 @@ pub fn[I, T] Parser::or(
 /// Use sparingly — prefer grammars where alternatives are
 /// distinguishable without backtracking.
 #inline
-pub fn[I, T] Parser::attempt(self : Parser[I, T]) -> Parser[I, T] {
-  Parser::new(input => {
+pub fn[I, T, E : Commit] ParserRaw::attempt(
+  self : ParserRaw[I, T, E],
+) -> ParserRaw[I, T, E] {
+  ParserRaw::new(input => {
     self.run(input).map_err(error => Commit::clear_commit(error))
   })
 }
@@ -143,8 +145,10 @@ pub fn[I, T] Parser::attempt(self : Parser[I, T]) -> Parser[I, T] {
 ///
 /// Returns `None` on non-committed failure. Committed failures
 /// propagate immediately.
-pub fn[I, T] Parser::optional(self : Parser[I, T]) -> Parser[I, T?] {
-  Parser::new(input => {
+pub fn[I, T, E : Commit] ParserRaw::optional(
+  self : ParserRaw[I, T, E],
+) -> ParserRaw[I, T?, E] {
+  ParserRaw::new(input => {
     match self.run(input) {
       Ok((value, rest)) => Ok((Some(value), rest))
       Err(error) => Commit::reject_if_committed(error, None, input)
@@ -163,11 +167,11 @@ pub fn[I, T] Parser::optional(self : Parser[I, T]) -> Parser[I, T?] {
 ///
 /// If input was consumed before failure, the original error
 /// is preserved (furthest position wins).
-pub fn[I : Cursor, T] Parser::label(
-  self : Parser[I, T],
+pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::label(
+  self : ParserRaw[I, T, E],
   expected : String,
-) -> Parser[I, T] {
-  Parser::new(input => {
+) -> ParserRaw[I, T, E] {
+  ParserRaw::new(input => {
     self
     .run(input)
     .map_err(error => {
@@ -184,11 +188,11 @@ pub fn[I : Cursor, T] Parser::label(
 ///
 /// * `self` : The parser to wrap.
 ///
-/// Only valid for `Input`-based parsers.
-///
 /// Returns a parser that runs `self` then skips whitespace.
 #inline
-pub fn[T] Parser::lexeme(self : Parser[Input, T]) -> Parser[Input, T] {
+pub fn[T] ParserRaw::lexeme(
+  self : Parser[Input, T],
+) -> Parser[Input, T] {
   self.skip(spaces())
 }
 
@@ -203,11 +207,11 @@ pub fn[T] Parser::lexeme(self : Parser[Input, T]) -> Parser[Input, T] {
 ///
 /// Equivalent to `left.then(self).skip(right)`.
 #inline
-pub fn[I : Cursor, T, L, R] Parser::between(
-  self : Parser[I, T],
-  left : Parser[I, L],
-  right : Parser[I, R],
-) -> Parser[I, T] {
+pub fn[I : Cursor, T, L, R, E : Commit] ParserRaw::between(
+  self : ParserRaw[I, T, E],
+  left : ParserRaw[I, L, E],
+  right : ParserRaw[I, R, E],
+) -> ParserRaw[I, T, E] {
   left.then(self).skip(right)
 }
 
@@ -221,10 +225,10 @@ pub fn[I : Cursor, T, L, R] Parser::between(
 ///
 /// Equivalent to `left *> self`.
 #inline
-pub fn[I : Cursor, T, L] Parser::after(
-  self : Parser[I, T],
-  left : Parser[I, L],
-) -> Parser[I, T] {
+pub fn[I : Cursor, T, L, E : Commit] ParserRaw::after(
+  self : ParserRaw[I, T, E],
+  left : ParserRaw[I, L, E],
+) -> ParserRaw[I, T, E] {
   left.then(self)
 }
 
@@ -238,21 +242,15 @@ pub fn[I : Cursor, T, L] Parser::after(
 ///
 /// Equivalent to `self <* right`.
 #inline
-pub fn[I : Cursor, T, R] Parser::before(
-  self : Parser[I, T],
-  right : Parser[I, R],
-) -> Parser[I, T] {
+pub fn[I : Cursor, T, R, E : Commit] ParserRaw::before(
+  self : ParserRaw[I, T, E],
+  right : ParserRaw[I, R, E],
+) -> ParserRaw[I, T, E] {
   self.skip(right)
 }
 
 ///|
 /// Standalone version of `Parser::lexeme`.
-///
-/// Parameters:
-///
-/// * `parser` : The parser to wrap.
-///
-/// Returns a parser that runs `parser` then skips trailing whitespace.
 #inline
 pub fn[T] lexeme(parser : Parser[Input, T]) -> Parser[Input, T] {
   parser.lexeme()
@@ -260,12 +258,6 @@ pub fn[T] lexeme(parser : Parser[Input, T]) -> Parser[Input, T] {
 
 ///|
 /// Matches an exact string, then skips trailing whitespace.
-///
-/// Parameters:
-///
-/// * `text` : The string to match.
-///
-/// Returns a parser that matches `text` followed by optional whitespace.
 #inline
 pub fn symbol(text : String) -> Parser[Input, String] {
   string(text).lexeme()
@@ -274,20 +266,12 @@ pub fn symbol(text : String) -> Parser[Input, String] {
 ///|
 /// Negative lookahead. Succeeds with `()` (consuming no input)
 /// when `self` fails.
-///
-/// Parameters:
-///
-/// * `self` : The parser to check for absence.
-/// * `label` : The label for error messages when `self` succeeds.
-///
-/// When `self` succeeds, fails with an uncommitted error
-/// `"unexpected {label}"`.
 #inline
-pub fn[I : Cursor, T] Parser::not_followed_by(
-  self : Parser[I, T],
+pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::not_followed_by(
+  self : ParserRaw[I, T, E],
   label : String,
-) -> Parser[I, Unit] {
-  Parser::new(input => {
+) -> ParserRaw[I, Unit, E] {
+  ParserRaw::new(input => {
     match self.run(input) {
       Ok(_) => Err(ParseFailure::message(input, "unexpected " + label))
       Err(_) => Ok(((), input))
@@ -296,11 +280,11 @@ pub fn[I : Cursor, T] Parser::not_followed_by(
 }
 
 ///|
-fn[I : Cursor, T] choice_impl(
-  parsers : Array[Parser[I, T]],
+fn[I : Cursor, T, E : Commit + CanMerge + ParseFailure] choice_impl(
+  parsers : Array[ParserRaw[I, T, E]],
   idx : Int,
   input : I,
-) -> Result[(T, I), ParseError] {
+) -> Result[(T, I), E] {
   guard idx < parsers.length() else {
     Err(ParseFailure::message(input, "empty choice"))
   }
@@ -317,31 +301,20 @@ fn[I : Cursor, T] choice_impl(
 
 ///|
 /// Tries each parser in the array in order on the same input.
-///
-/// Parameters:
-///
-/// * `parsers` : The array of alternative parsers.
-///
-/// Returns the first success. Merges errors from all failures
-/// (furthest position wins). Aborts immediately on committed errors.
 #inline
-pub fn[I : Cursor, T] choice(parsers : Array[Parser[I, T]]) -> Parser[I, T] {
-  Parser::new(input => choice_impl(parsers, 0, input))
+pub fn[I : Cursor, T, E : Commit + CanMerge + ParseFailure] choice(
+  parsers : Array[ParserRaw[I, T, E]],
+) -> ParserRaw[I, T, E] {
+  ParserRaw::new(input => choice_impl(parsers, 0, input))
 }
 
 ///|
 /// Standalone version of `Parser::between`.
-///
-/// Parameters:
-///
-/// * `left` : The opening parser; its result is discarded.
-/// * `parser` : The middle parser whose result is returned.
-/// * `right` : The closing parser; its result is discarded.
 #inline
-pub fn[I : Cursor, T, L, R] between(
-  left : Parser[I, L],
-  parser : Parser[I, T],
-  right : Parser[I, R],
-) -> Parser[I, T] {
+pub fn[I : Cursor, T, L, R, E : Commit] between(
+  left : ParserRaw[I, L, E],
+  parser : ParserRaw[I, T, E],
+  right : ParserRaw[I, R, E],
+) -> ParserRaw[I, T, E] {
   parser.between(left, right)
 }
