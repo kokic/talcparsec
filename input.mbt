@@ -1,4 +1,12 @@
 ///|
+/// Input abstraction for parser combinators.
+///
+/// Provides the `Cursor` trait for position-tracking input cursors and the
+/// concrete `Input` struct, an immutable UTF-16 character cursor with
+/// line/column bookkeeping. The `Cursor` trait enables parameterising
+/// parsers over arbitrary input sources.
+
+///|
 /// A source position reported by parser diagnostics.
 pub(all) struct Position {
   offset : Int

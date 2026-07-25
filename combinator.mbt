@@ -1,7 +1,10 @@
 ///|
-pub fn[T] array_cons(tail : Array[T], head : T) -> Array[T] {
-  Array::new(capacity=tail.length() + 1)..push(head)..append(tail)
-}
+/// Core parser combinators: monadic bind, choice, and structural helpers.
+///
+/// Provides `bind`, `map`, `then`, `skip`, `or`, `attempt`, `optional`,
+/// `label`, `lexeme`, `between`, `not_followed_by`, `choice`, and their
+/// standalone variants. All combinators respect the commit mechanism for
+/// commit-aware backtracking.
 
 ///|
 /// Monadic bind. Runs `self`, passes the result to `next`.
@@ -190,9 +193,7 @@ pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::label(
 ///
 /// Returns a parser that runs `self` then skips whitespace.
 #inline
-pub fn[T] ParserRaw::lexeme(
-  self : Parser[Input, T],
-) -> Parser[Input, T] {
+pub fn[T] ParserRaw::lexeme(self : Parser[Input, T]) -> Parser[Input, T] {
   self.skip(spaces())
 }
 
@@ -280,32 +281,38 @@ pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::not_followed_by(
 }
 
 ///|
-fn[I : Cursor, T, E : Commit + CanMerge + ParseFailure] choice_impl(
-  parsers : Array[ParserRaw[I, T, E]],
-  idx : Int,
-  input : I,
-) -> Result[(T, I), E] {
-  guard idx < parsers.length() else {
-    Err(ParseFailure::message(input, "empty choice"))
-  }
-  match parsers[idx].run(input) {
-    Ok(result) => Ok(result)
-    Err(error) => {
-      guard !Commit::is_committed(error) else { Err(error) }
-      choice_impl(parsers, idx + 1, input).map_err(e => {
-        CanMerge::merge(error, e)
-      })
-    }
-  }
-}
-
-///|
 /// Tries each parser in the array in order on the same input.
+///
+/// Iterates through parsers, accumulating errors via `CanMerge::merge`.
+/// On committed failure, propagation is immediate — no further alternatives
+/// are tried. If no parser succeeds, the merged error (or a fallback message
+/// for an empty array) is returned.
 #inline
 pub fn[I : Cursor, T, E : Commit + CanMerge + ParseFailure] choice(
   parsers : Array[ParserRaw[I, T, E]],
 ) -> ParserRaw[I, T, E] {
-  ParserRaw::new(input => choice_impl(parsers, 0, input))
+  ParserRaw::new(input => {
+    let mut merged : E? = None
+    for i = 0; i < parsers.length(); i = i + 1 {
+      match parsers[i].run(input) {
+        Ok(result) => break Ok(result)
+        Err(error) => {
+          guard !Commit::is_committed(error) else { break Err(error) }
+          // Accumulate: merge the latest error into the running combination.
+          merged = match merged {
+            Some(prev) => Some(CanMerge::merge(prev, error))
+            None => Some(error)
+          }
+          continue
+        }
+      }
+    } nobreak {
+      match merged {
+        Some(err) => Err(err)
+        None => Err(ParseFailure::message(input, "empty choice"))
+      }
+    }
+  })
 }
 
 ///|

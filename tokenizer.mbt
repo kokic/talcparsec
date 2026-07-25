@@ -1,25 +1,9 @@
 ///|
-pub let space : CParser = char(' ')
-
-///|
-pub let newline : CParser = char('\n')
-
-///|
-pub let not_newline : CParser = satisfy("not newline", c => c != '\n')
-
-///|
-pub let line_content : SParser = many_chars(not_newline)
-
-///|
-/// Maps content `c` to a parser that consumes a newline and returns `c` +
-/// a newline character.
-pub let with_line : (String) -> SParser = c => newline.map(_ => "\{c}\n")
-
-///|
-/// Consumes all non-newline characters, then consumes the trailing newline.
+/// Character-level and token-level primitive parsers.
 ///
-/// Returns the matched line content including the newline terminator.
-pub let rest_of_line : SParser = line_content.bind(with_line)
+/// Defines the fundamental character parsers (`char`, `satisfy`, `string`,
+/// `take_while`, etc.), generic token parser `satisfy_input`, whitespace
+/// helpers, and pre-built convenience parsers for line-oriented input.
 
 ///|
 pub fn[I : Cursor] eof() -> Parser[I, Unit] {
@@ -129,3 +113,28 @@ pub fn whitespace() -> Parser[Input, Char] {
 pub fn spaces() -> Parser[Input, Array[Char]] {
   whitespace().many()
 }
+
+/// --- Pre-built convenience parsers --------------------------------------
+
+///|
+pub let space : CParser = char(' ')
+
+///|
+pub let newline : CParser = char('\n')
+
+///|
+pub let not_newline : CParser = satisfy("not newline", c => c != '\n')
+
+///|
+pub let line_content : SParser = many_chars(not_newline)
+
+///|
+/// Maps content `c` to a parser that consumes a newline and returns `c` +
+/// a newline character.
+pub let with_line : (String) -> SParser = c => newline.map(_ => "\{c}\n")
+
+///|
+/// Consumes all non-newline characters, then consumes the trailing newline.
+///
+/// Returns the matched line content including the newline terminator.
+pub let rest_of_line : SParser = line_content.bind(with_line)

@@ -1,4 +1,11 @@
 ///|
+/// Error model: traits and concrete type for parse diagnostics.
+///
+/// Defines the trait hierarchy `Commit` → `CanMerge` → `Positioned` → `ParseFailure`
+/// and the default `ParseError` struct. The generic function `commit_then_merge`
+/// captures the core choice-combinator logic independently of the concrete error type.
+
+///|
 /// Types that track parse commitment — when a parser consumes input
 /// and then fails, the error is "committed" to prevent backtracking.
 pub(open) trait Commit {

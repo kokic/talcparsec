@@ -1,4 +1,17 @@
 ///|
+/// Repetition combinators: many, some, and separated variants.
+///
+/// Provides `many`, `some`, `sep_by`, `sep_by1`, and `many_until`.
+/// All repetition parsers guard against infinite loops by checking for
+/// zero-length progress via `same_cursor`.
+
+///|
+/// Prepend an element to the tail of an array.
+fn[T] Array::cons(tail : Array[T], head : T) -> Array[T] {
+  Array::new(capacity=tail.length() + 1)..push(head)..append(tail)
+}
+
+///|
 /// Zero or more repetitions of `self`.
 ///
 /// Stops on non-committed failure. Rejects parsers that accept
@@ -13,9 +26,7 @@ pub fn[I : Cursor, T, E : Commit + ParseFailure] ParserRaw::many(
         Ok((value, next)) =>
           if next.same_cursor(rest) {
             break Err(
-              ParseFailure::message(
-                rest, "many parser accepted empty input",
-              ),
+              ParseFailure::message(rest, "many parser accepted empty input"),
             )
           } else {
             values.push(value)
@@ -33,7 +44,7 @@ pub fn[I : Cursor, T, E : Commit + ParseFailure] ParserRaw::many(
 pub fn[I : Cursor, T, E : Commit + ParseFailure] ParserRaw::some(
   self : ParserRaw[I, T, E],
 ) -> ParserRaw[I, Array[T], E] {
-  self.bind(head => self.many().map(tail => array_cons(tail, head)))
+  self.bind(head => self.many().map(tail => tail.cons(head)))
 }
 
 ///|
@@ -52,17 +63,7 @@ pub fn[I : Cursor, T, S, E : Commit + ParseFailure] ParserRaw::sep_by1(
   self : ParserRaw[I, T, E],
   separator : ParserRaw[I, S, E],
 ) -> ParserRaw[I, Array[T], E] {
-  self.bind(head => {
-    separator
-    .then(self)
-    .many()
-    .map(tail => {
-      let values = Array::new(capacity=tail.length() + 1)
-      values.push(head)
-      values.append(tail)
-      values
-    })
-  })
+  self.bind(head => separator.then(self).many().map(tail => tail.cons(head)))
 }
 
 ///|

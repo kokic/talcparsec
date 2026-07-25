@@ -1,4 +1,11 @@
 ///|
+/// String-specific parser combinators and type aliases.
+///
+/// Provides `StringParser`, `CParser`, `SParser` type aliases and the
+/// `many_chars` / `many_chars1` helpers that collect character-level
+/// results into `String` values.
+
+///|
 /// Convenience alias for `Parser[Input, T]`, used for string-input parsers.
 pub type StringParser[T] = Parser[Input, T]
 
