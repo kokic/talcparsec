@@ -37,7 +37,7 @@ pub fn[I : Cursor, T] satisfy_input(
 
 ///|
 pub fn char(expected : Char) -> Parser[Input, Char] {
-  satisfy("'" + expected.to_string() + "'", ch => ch == expected)
+  satisfy("'\{expected}'", ch => ch == expected)
 }
 
 ///|
@@ -50,12 +50,12 @@ pub fn satisfy(
 
 ///|
 pub fn one_of(chars : String) -> Parser[Input, Char] {
-  satisfy("one of " + chars, ch => chars.contains_char(ch))
+  satisfy("one of \{chars}", ch => chars.contains_char(ch))
 }
 
 ///|
 pub fn none_of(chars : String) -> Parser[Input, Char] {
-  satisfy("none of " + chars, ch => !chars.contains_char(ch))
+  satisfy("none of \{chars}", ch => !chars.contains_char(ch))
 }
 
 ///|
@@ -64,7 +64,7 @@ pub fn string(expected : String) -> Parser[Input, String] {
     if input.remaining().has_prefix(expected.to_string_view()) {
       Ok((expected, input.advance_string(expected)))
     } else {
-      Err(ParseFailure::signal(input, "\"" + expected + "\""))
+      Err(ParseFailure::signal(input, "\"\{expected}\""))
     }
   })
 }
@@ -86,10 +86,9 @@ pub fn take_while(
         None => break rest
       }
     }
-    if chars.length() == 0 {
-      Err(ParseFailure::signal(input, name))
-    } else {
-      Ok((String::from_array(chars), rest))
+    match chars {
+      [] => Err(ParseFailure::signal(input, name))
+      _ => Ok((String::from_array(chars), rest))
     }
   })
 }

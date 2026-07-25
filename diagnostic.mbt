@@ -221,14 +221,11 @@ pub impl ParseFailure for ParseError with fn[I : Cursor] message(
 
 ///|
 pub fn ParseError::to_string(self : ParseError) -> String {
-  let base = "parse error at " +
-    self.line.to_string() +
-    ":" +
-    self.column.to_string()
+  let base = "parse error at \{self.line}:\{self.column}"
   if self.message != "" {
-    base + ": " + self.message
+    "\{base}: \{self.message}"
   } else if self.expected.length() > 0 {
-    base + ": expected " + self.expected.join(" or ")
+    "\{base}: expected \{self.expected.join(" or ")}"
   } else {
     base
   }
