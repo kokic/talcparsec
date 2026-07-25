@@ -23,15 +23,15 @@ pub fn[I : Cursor, T, E : Commit + ParseFailure] ParserRaw::many(
     let values = Array::new()
     for rest = input {
       match self.run(rest) {
-        Ok((value, next)) =>
-          if next.same_cursor(rest) {
+        Ok((value, next)) => {
+          guard !next.same_cursor(rest) else {
             break Err(
               ParseFailure::message(rest, "many parser accepted empty input"),
             )
-          } else {
-            values.push(value)
-            continue next
           }
+          values.push(value)
+          continue next
+        }
         Err(error) => break Commit::reject_if_committed(error, values, rest)
       }
     }
@@ -80,7 +80,7 @@ pub fn[I : Cursor, T, U, E : Commit + ParseFailure] ParserRaw::many_until(
         Err(_) =>
           match self.run(rest) {
             Ok((value, next)) => {
-              if next.same_cursor(rest) {
+              guard !next.same_cursor(rest) else {
                 break Err(
                   ParseFailure::message(
                     rest, "many_until parser accepted empty input",

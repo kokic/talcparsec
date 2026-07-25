@@ -8,11 +8,10 @@
 ///|
 pub fn[I : Cursor] eof() -> Parser[I, Unit] {
   ParserRaw::new(input => {
-    if input.is_at_eof() {
-      Ok(((), input))
-    } else {
+    guard input.is_at_eof() else {
       Err(ParseFailure::signal(input, "end of input"))
     }
+    Ok(((), input))
   })
 }
 
@@ -24,12 +23,12 @@ pub fn[I : Cursor, T] satisfy_input(
 ) -> Parser[I, T] {
   ParserRaw::new(input => {
     match next(input) {
-      Some((token, rest)) =>
-        if predicate(token) {
-          Ok((token, rest))
-        } else {
+      Some((token, rest)) => {
+        guard predicate(token) else {
           Err(ParseFailure::signal(input, name))
         }
+        Ok((token, rest))
+      }
       None => Err(ParseFailure::signal(input, name))
     }
   })
@@ -61,11 +60,10 @@ pub fn none_of(chars : String) -> Parser[Input, Char] {
 ///|
 pub fn string(expected : String) -> Parser[Input, String] {
   ParserRaw::new(input => {
-    if input.remaining().has_prefix(expected.to_string_view()) {
-      Ok((expected, input.advance_string(expected)))
-    } else {
+    guard input.remaining().has_prefix(expected.to_string_view()) else {
       Err(ParseFailure::signal(input, "\"\{expected}\""))
     }
+    Ok((expected, input.advance_string(expected)))
   })
 }
 

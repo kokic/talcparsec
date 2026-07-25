@@ -234,11 +234,8 @@ pub fn ParseError::to_string(self : ParseError) -> String {
 ///|
 /// Generic error combinator usable with any `E : Commit + CanMerge`.
 fn[E : Commit + CanMerge] commit_then_merge(first : E, second : E) -> E {
-  if Commit::is_committed(first) {
-    first
-  } else {
-    CanMerge::merge(first, second)
-  }
+  guard !Commit::is_committed(first) else { first }
+  CanMerge::merge(first, second)
 }
 
 ///|

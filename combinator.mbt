@@ -110,12 +110,9 @@ pub fn[I, T, E : Commit + CanMerge] ParserRaw::or(
   ParserRaw::new(input => {
     match self.run(input) {
       Ok((value, rest)) => Ok((value, rest))
+      Err(first) if Commit::is_committed(first) => Err(first)
       Err(first) =>
-        if Commit::is_committed(first) {
-          Err(first)
-        } else {
-          other.run(input).map_err(second => CanMerge::merge(first, second))
-        }
+        other.run(input).map_err(second => CanMerge::merge(first, second))
     }
   })
 }
@@ -274,7 +271,7 @@ pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::not_followed_by(
 ) -> ParserRaw[I, Unit, E] {
   ParserRaw::new(input => {
     match self.run(input) {
-      Ok(_) => Err(ParseFailure::message(input, "unexpected " + label))
+      Ok(_) => Err(ParseFailure::message(input, "unexpected \{label}"))
       Err(_) => Ok(((), input))
     }
   })
