@@ -162,11 +162,17 @@ pub impl Commit for ParseError with fn[I, T] reject_if_committed(
 
 ///|
 /// --- CanMerge impl ---
+///
+/// A committed failure at any offset commits the merged error: the
+/// commit flag is OR'd even when the furthest-position error (the one
+/// kept for diagnostics) is itself uncommitted. Otherwise a committed
+/// failure at a shallower offset would be silently swallowed by a deeper
+/// uncommitted one, letting choice backtracks that must not happen.
 pub impl CanMerge for ParseError with fn merge(self, other) {
   if self.offset > other.offset {
-    self
+    { ..self, committed: self.committed || other.committed }
   } else if other.offset > self.offset {
-    other
+    { ..other, committed: self.committed || other.committed }
   } else {
     let expected = self.expected.copy()
     for item in other.expected {

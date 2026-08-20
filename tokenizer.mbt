@@ -117,10 +117,13 @@ pub fn spaces() -> Parser[Input, Array[Char]] {
 pub let space : CParser = char(' ')
 
 ///|
-pub let newline : CParser = char('\n')
+pub let newline : CParser = char('\r')
+  .then(char('\n'))
+  .map(_ => '\n')
+  .or(char('\n'))
 
 ///|
-pub let not_newline : CParser = satisfy("not newline", c => c != '\n')
+pub let not_newline : CParser = satisfy("not newline", c => c != '\n' && c != '\r')
 
 ///|
 pub let line_content : SParser = many_chars(not_newline)
