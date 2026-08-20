@@ -178,6 +178,12 @@ pub impl Commit for ParseError with fn[I, T] reject_if_committed(
 
 ///|
 /// --- CanMerge impl ---
+///
+/// A committed failure at any offset commits the merged error: the
+/// commit flag is OR'd even when the furthest-position error (the one
+/// kept for diagnostics) is itself uncommitted. Otherwise a committed
+/// failure at a shallower offset would be silently swallowed by a deeper
+/// uncommitted one, letting choice backtracks that must not happen.
 ///|
 fn ParseError::combine_labels(self : ParseError, other : ParseError) -> ParseError {
   let primary = if self.expected != "" { self.expected } else { other.expected }
@@ -235,9 +241,9 @@ fn ParseError::combine_labels(self : ParseError, other : ParseError) -> ParseErr
 ///|
 pub impl CanMerge for ParseError with fn merge(self, other) {
   if self.offset > other.offset {
-    self
+    { ..self, committed: self.committed || other.committed }
   } else if other.offset > self.offset {
-    other
+    { ..other, committed: self.committed || other.committed }
   } else if other.expected == self.expected {
     match other.alternatives {
       None => {
@@ -288,6 +294,21 @@ pub impl ParseFailure for ParseError with fn[I : Cursor] message(
 ) -> ParseError {
   ParseError::message(input, msg)
 }
+
+///|
+pub extend ParseError with Eq::{not_equal, equal}
+
+///|
+pub extend ParseError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+pub extend ParseError with Commit::{mark_committed, clear_commit}
+
+///|
+pub extend ParseError with Positioned::{error_line, error_offset, error_column}
+
+///|
+pub extend ParseError with ParseFailure::{signal}
 
 ///|
 pub fn ParseError::to_string(self : ParseError) -> String {

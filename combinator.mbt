@@ -171,7 +171,8 @@ pub fn[I, T, E : Commit] ParserRaw::optional(
 /// * `expected` : The label to report on failure.
 ///
 /// If input was consumed before failure, the original error
-/// is preserved (furthest position wins).
+/// is preserved (furthest position wins). A replaced label
+/// keeps the original error's committed flag.
 pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::label(
   self : ParserRaw[I, T, E],
   expected : String,
@@ -181,7 +182,9 @@ pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::label(
     .run(input)
     .map_err(error => {
       guard Positioned::error_offset(error) == input.cursor() else { error }
-      ParseFailure::signal(input, expected)
+      let labeled = ParseFailure::signal(input, expected)
+      guard Commit::is_committed(error) else { labeled }
+      Commit::mark_committed(labeled)
     })
   })
 }

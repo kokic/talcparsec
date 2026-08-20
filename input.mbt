@@ -124,3 +124,18 @@ pub impl Cursor for Input with fn is_at_eof(self) {
 impl Cursor with fn same_cursor(self, other) {
   self.cursor() == other.cursor()
 }
+
+///|
+pub extend Input with Cursor::{cursor, position, is_at_eof, same_cursor}
+
+///|
+pub extend Input with Eq::{not_equal, equal}
+
+///|
+pub extend Input with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+pub extend Position with Eq::{not_equal, equal}
+
+///|
+pub extend Position with @moonbitlang/core/debug.Debug::{to_repr}
