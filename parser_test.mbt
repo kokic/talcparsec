@@ -190,7 +190,7 @@ test "merge preserves commit across differing offsets" {
 
 ///|
 test "label preserves committed flag" {
-  let committed = ParserRaw::new((input : Input) =>
+  let committed : Parser[Input, Char] = ParserRaw::new((input : Input) =>
     Err(ParseError::new(input, "x").with_commit()))
   match committed.label("y").parse(Input::new("abc")) {
     Err(error) => @test.assert_eq(error.is_committed(), true)
@@ -204,7 +204,7 @@ test "line parsers handle CRLF" {
   match rest_of_line.parse_partial(Input::new("line1\r\nline2\r\n")) {
     Ok((line, rest)) => {
       @test.assert_eq(line, "line1\n")
-      @test.assert_eq(rest.remaining().to_string(), "line2\r\n")
+      @test.assert_eq(rest.remaining().to_owned(), "line2\r\n")
     }
     Err(_) => @test.fail("expected CRLF line to parse")
   }

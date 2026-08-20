@@ -226,6 +226,21 @@ pub impl ParseFailure for ParseError with fn[I : Cursor] message(
 }
 
 ///|
+pub extend ParseError with Eq::{not_equal, equal}
+
+///|
+pub extend ParseError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+pub extend ParseError with Commit::{mark_committed, clear_commit}
+
+///|
+pub extend ParseError with Positioned::{error_line, error_offset, error_column}
+
+///|
+pub extend ParseError with ParseFailure::{signal}
+
+///|
 pub fn ParseError::to_string(self : ParseError) -> String {
   let base = "parse error at \{self.line}:\{self.column}"
   if self.message != "" {
