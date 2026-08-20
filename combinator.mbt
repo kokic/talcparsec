@@ -24,17 +24,17 @@ pub fn[I : Cursor, T, U, E : Commit] ParserRaw::bind(
   next : (T) -> ParserRaw[I, U, E],
 ) -> ParserRaw[I, U, E] {
   ParserRaw::new(input => {
-    self
-    .run(input)
-    .bind(result => {
-      let (value, rest) = result
-      next(value)
-      .run(rest)
-      .map_err(error => {
-        guard rest.cursor() != input.cursor() else { error }
-        Commit::mark_committed(error)
-      })
-    })
+    match self.run(input) {
+      Ok((value, rest)) =>
+        match next(value).run(rest) {
+          Ok(result) => Ok(result)
+          Err(error) => {
+            guard !rest.same_cursor(input) else { Err(error) }
+            Err(Commit::mark_committed(error))
+          }
+        }
+      Err(error) => Err(error)
+    }
   })
 }
 
@@ -49,11 +49,16 @@ pub fn[I : Cursor, T, U, E : Commit] ParserRaw::bind(
 /// Returns a parser that parses the same input as `self`
 /// and applies `f` to the result on success.
 #inline
-pub fn[I : Cursor, T, U, E : Commit] ParserRaw::map(
+pub fn[I, T, U, E] ParserRaw::map(
   self : ParserRaw[I, T, E],
   f : (T) -> U,
 ) -> ParserRaw[I, U, E] {
-  self.bind(value => pure(f(value)))
+  ParserRaw::new(input => {
+    match self.run(input) {
+      Ok((value, rest)) => Ok((f(value), rest))
+      Err(error) => Err(error)
+    }
+  })
 }
 
 ///|
@@ -191,7 +196,12 @@ pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::label(
 /// Returns a parser that runs `self` then skips whitespace.
 #inline
 pub fn[T] ParserRaw::lexeme(self : Parser[Input, T]) -> Parser[Input, T] {
-  self.skip(spaces())
+  ParserRaw::new(input => {
+    match self.run(input) {
+      Ok((value, rest)) => Ok((value, skip_ws(rest)))
+      Err(error) => Err(error)
+    }
+  })
 }
 
 ///|

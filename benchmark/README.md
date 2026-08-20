@@ -16,7 +16,13 @@ The suite covers these parser costs:
 - allocation-heavy `sep_by` parsing of 1,000 identifiers;
 - flat and deeply nested recursive S-expression parsing;
 - explicit backtracking across a long common prefix;
-- construction and merging of diagnostics from 26 failed alternatives.
+- construction and merging of diagnostics from 26 failed alternatives;
+- zero-allocation whitespace skipping versus `spaces()` array collection;
+- bitmap-based `one_of` membership scanning;
+- `many_chars1` digit scanning (direct accumulation loop);
+- error position lookup (line/column via `line_starts` binary search) on a
+  2,048-line input;
+- exact `string` match over a 4 KiB multi-line input.
 
 Run one benchmark by index while investigating a regression:
 

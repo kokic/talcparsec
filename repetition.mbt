@@ -6,12 +6,6 @@
 /// zero-length progress via `same_cursor`.
 
 ///|
-/// Prepend an element to the tail of an array.
-fn[T] Array::cons(tail : Array[T], head : T) -> Array[T] {
-  Array::new(capacity=tail.length() + 1)..push(head)..append(tail)
-}
-
-///|
 /// Zero or more repetitions of `self`.
 ///
 /// Stops on non-committed failure. Rejects parsers that accept
@@ -44,7 +38,29 @@ pub fn[I : Cursor, T, E : Commit + ParseFailure] ParserRaw::many(
 pub fn[I : Cursor, T, E : Commit + ParseFailure] ParserRaw::some(
   self : ParserRaw[I, T, E],
 ) -> ParserRaw[I, Array[T], E] {
-  self.bind(head => self.many().map(tail => tail.cons(head)))
+  ParserRaw::new(input => {
+    match self.run(input) {
+      Ok((head, rest)) => {
+        let values = Array::new()
+        values.push(head)
+        for r = rest {
+          match self.run(r) {
+            Ok((value, next)) => {
+              guard !next.same_cursor(r) else {
+                break Err(
+                  ParseFailure::message(r, "many parser accepted empty input"),
+                )
+              }
+              values.push(value)
+              continue next
+            }
+            Err(error) => break Commit::reject_if_committed(error, values, r)
+          }
+        }
+      }
+      Err(error) => Err(error)
+    }
+  })
 }
 
 ///|
@@ -63,7 +79,40 @@ pub fn[I : Cursor, T, S, E : Commit + ParseFailure] ParserRaw::sep_by1(
   self : ParserRaw[I, T, E],
   separator : ParserRaw[I, S, E],
 ) -> ParserRaw[I, Array[T], E] {
-  self.bind(head => separator.then(self).many().map(tail => tail.cons(head)))
+  ParserRaw::new(input => {
+    match self.run(input) {
+      Ok((head, rest)) => {
+        let values = Array::new()
+        values.push(head)
+        for r = rest {
+          match separator.run(r) {
+            Ok((_, after_sep)) =>
+              match self.run(after_sep) {
+                Ok((value, next)) => {
+                  guard !next.same_cursor(r) else {
+                    break Err(
+                      ParseFailure::message(
+                        r, "many parser accepted empty input",
+                      ),
+                    )
+                  }
+                  values.push(value)
+                  continue next
+                }
+                Err(error) => {
+                  guard after_sep.same_cursor(r) else {
+                    break Err(Commit::mark_committed(error))
+                  }
+                  break Commit::reject_if_committed(error, values, r)
+                }
+              }
+            Err(error) => break Commit::reject_if_committed(error, values, r)
+          }
+        }
+      }
+      Err(error) => Err(error)
+    }
+  })
 }
 
 ///|

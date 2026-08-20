@@ -48,7 +48,8 @@ pub(all) struct ParseError {
   offset : Int
   line : Int
   column : Int
-  expected : Array[String]
+  expected : String
+  alternatives : Array[String]?
   message : String
   committed : Bool
 } derive(Eq, Debug)
@@ -70,7 +71,8 @@ pub fn[I : Cursor] ParseError::new(input : I, expected : String) -> ParseError {
     offset: position.offset,
     line: position.line,
     column: position.column,
-    expected: [expected],
+    expected,
+    alternatives: None,
     message: "",
     committed: false,
   }
@@ -83,7 +85,8 @@ pub fn[I : Cursor] ParseError::message(input : I, msg : String) -> ParseError {
     offset: position.offset,
     line: position.line,
     column: position.column,
-    expected: [],
+    expected: "",
+    alternatives: None,
     message: msg,
     committed: false,
   }
@@ -106,7 +109,20 @@ pub fn ParseError::column(self : ParseError) -> Int {
 
 ///|
 pub fn ParseError::expected(self : ParseError) -> Array[String] {
-  self.expected
+  match self.alternatives {
+    Some(alts) =>
+      if self.expected == "" {
+        alts
+      } else {
+        [self.expected, ..alts]
+      }
+    None =>
+      if self.expected == "" {
+        []
+      } else {
+        [self.expected]
+      }
+  }
 }
 
 ///|
@@ -162,27 +178,81 @@ pub impl Commit for ParseError with fn[I, T] reject_if_committed(
 
 ///|
 /// --- CanMerge impl ---
+///|
+fn ParseError::combine_labels(self : ParseError, other : ParseError) -> ParseError {
+  let primary = if self.expected != "" { self.expected } else { other.expected }
+  let message = if self.message != "" { self.message } else { other.message }
+  let committed = self.committed || other.committed
+  let mut new_labels : Array[String]? = None
+  if self.expected != "" && other.expected != "" {
+    let dup = match self.alternatives {
+      Some(alts) => alts.contains(other.expected)
+      None => false
+    }
+    if !dup {
+      new_labels = Some([other.expected])
+    }
+  }
+  match other.alternatives {
+    Some(other_alts) =>
+      for label in other_alts {
+        if label != primary {
+          let dup = match self.alternatives {
+            Some(alts) => alts.contains(label)
+            None => false
+          }
+          if !dup {
+            match new_labels {
+              Some(labels) => labels.push(label)
+              None => new_labels = Some([label])
+            }
+          }
+        }
+      }
+    None => ()
+  }
+  let alternatives = match (self.alternatives, new_labels) {
+    (Some(alts), Some(new)) => {
+      let combined = alts.copy()
+      combined.append(new)
+      Some(combined)
+    }
+    (Some(alts), None) => Some(alts)
+    (None, Some(new)) => Some(new)
+    (None, None) => None
+  }
+  {
+    offset: self.offset,
+    line: self.line,
+    column: self.column,
+    expected: primary,
+    alternatives,
+    message,
+    committed,
+  }
+}
+
+///|
 pub impl CanMerge for ParseError with fn merge(self, other) {
   if self.offset > other.offset {
     self
   } else if other.offset > self.offset {
     other
-  } else {
-    let expected = self.expected.copy()
-    for item in other.expected {
-      if !expected.contains(item) {
-        expected.push(item)
+  } else if other.expected == self.expected {
+    match other.alternatives {
+      None => {
+        let committed = self.committed || other.committed
+        let message = if self.message != "" { self.message } else { other.message }
+        if committed == self.committed && message == self.message {
+          self
+        } else {
+          { ..self, message, committed }
+        }
       }
+      Some(_) => ParseError::combine_labels(self, other)
     }
-    let message = if self.message != "" { self.message } else { other.message }
-    {
-      offset: self.offset,
-      line: self.line,
-      column: self.column,
-      expected,
-      message,
-      committed: self.committed || other.committed,
-    }
+  } else {
+    ParseError::combine_labels(self, other)
   }
 }
 
@@ -224,10 +294,13 @@ pub fn ParseError::to_string(self : ParseError) -> String {
   let base = "parse error at \{self.line}:\{self.column}"
   if self.message != "" {
     "\{base}: \{self.message}"
-  } else if self.expected.length() > 0 {
-    "\{base}: expected \{self.expected.join(" or ")}"
   } else {
-    base
+    let labels = self.expected()
+    if labels.length() > 0 {
+      "\{base}: expected \{labels.join(" or ")}"
+    } else {
+      base
+    }
   }
 }
 

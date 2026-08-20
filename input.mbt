@@ -27,16 +27,23 @@ pub(open) trait Cursor {
 ///|
 /// Immutable character input cursor.
 /// Offsets are UTF-16 code unit offsets, matching MoonBit string indexing.
+/// Line/column positions are computed lazily from `line_starts` on demand.
 pub(all) struct Input {
   source : String
   offset : Int
-  line : Int
-  column : Int
+  line_starts : Array[Int]
 } derive(Eq, Debug)
 
 ///|
 pub fn Input::new(source : String) -> Input {
-  { source, offset: 0, line: 1, column: 1 }
+  let line_starts = Array::new()
+  line_starts.push(0)
+  for offset, ch in source.iter2() {
+    if ch == '\n' {
+      line_starts.push(offset + ch.utf16_len())
+    }
+  }
+  { source, offset: 0, line_starts }
 }
 
 ///|
@@ -59,30 +66,12 @@ pub fn Input::next(self : Input) -> (Char, Input)? {
 
 ///|
 pub fn Input::advance(self : Input, ch : Char) -> Input {
-  if ch == '\n' {
-    Input::{
-      source: self.source,
-      offset: self.offset + ch.utf16_len(),
-      line: self.line + 1,
-      column: 1,
-    }
-  } else {
-    Input::{
-      source: self.source,
-      offset: self.offset + ch.utf16_len(),
-      line: self.line,
-      column: self.column + 1,
-    }
-  }
+  { ..self, offset: self.offset + ch.utf16_len() }
 }
 
 ///|
 pub fn Input::advance_string(self : Input, text : String) -> Input {
-  let mut input = self
-  for ch in text.iter() {
-    input = input.advance(ch)
-  }
-  input
+  { ..self, offset: self.offset + text.length() }
 }
 
 ///|
@@ -97,7 +86,22 @@ pub impl Cursor for Input with fn cursor(self) {
 
 ///|
 pub impl Cursor for Input with fn position(self) {
-  { offset: self.offset, line: self.line, column: self.column }
+  let starts = self.line_starts
+  let mut lo = 0
+  let mut hi = starts.length()
+  while lo + 1 < hi {
+    let mid = (lo + hi) / 2
+    if starts[mid] <= self.offset {
+      lo = mid
+    } else {
+      hi = mid
+    }
+  }
+  {
+    offset: self.offset,
+    line: lo + 1,
+    column: self.offset - starts[lo] + 1,
+  }
 }
 
 ///|

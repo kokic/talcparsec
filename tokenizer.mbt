@@ -48,13 +48,54 @@ pub fn satisfy(
 }
 
 ///|
+fn skip_ws(input : Input) -> Input {
+  for offset = input.offset {
+    match input.source.get_char(offset) {
+      Some(ch) if ch.is_whitespace() => continue offset + ch.utf16_len()
+      _ => break { ..input, offset }
+    }
+  }
+}
+
+///|
+pub fn skip_spaces() -> Parser[Input, Unit] {
+  ParserRaw::new(input => Ok(((), skip_ws(input))))
+}
+
+///|
+fn ascii_table(chars : String) -> FixedArray[Bool] {
+  let table = FixedArray::makei(128, fn(_) { false })
+  for ch in chars.iter() {
+    let cp = ch.to_int()
+    if cp < 128 {
+      table[cp] = true
+    }
+  }
+  table
+}
+
+///|
 pub fn one_of(chars : String) -> Parser[Input, Char] {
-  satisfy("one of \{chars}", ch => chars.contains_char(ch))
+  let table = ascii_table(chars)
+  satisfy(
+    "one of \{chars}",
+    ch => {
+      let cp = ch.to_int()
+      if cp < 128 { table[cp] } else { chars.contains_char(ch) }
+    },
+  )
 }
 
 ///|
 pub fn none_of(chars : String) -> Parser[Input, Char] {
-  satisfy("none of \{chars}", ch => !chars.contains_char(ch))
+  let table = ascii_table(chars)
+  satisfy(
+    "none of \{chars}",
+    ch => {
+      let cp = ch.to_int()
+      if cp < 128 { !table[cp] } else { !chars.contains_char(ch) }
+    },
+  )
 }
 
 ///|
@@ -73,21 +114,15 @@ pub fn take_while(
   predicate : (Char) -> Bool,
 ) -> Parser[Input, String] {
   ParserRaw::new(input => {
-    let chars = Array::new()
-    let rest = for rest = input {
-      match rest.peek() {
-        Some(ch) => {
-          guard predicate(ch) else { break rest }
-          chars.push(ch)
-          continue rest.advance(ch)
-        }
-        None => break rest
+    let end = for offset = input.offset {
+      match input.source.get_char(offset) {
+        Some(ch) if predicate(ch) => continue offset + ch.utf16_len()
+        _ => break offset
       }
     }
-    match chars {
-      [] => Err(ParseFailure::signal(input, name))
-      _ => Ok((String::from_array(chars), rest))
-    }
+    guard end > input.offset else { Err(ParseFailure::signal(input, name)) }
+    let text = input.source[input.offset:end].to_owned()
+    Ok((text, { ..input, offset: end }))
   })
 }
 
@@ -108,7 +143,19 @@ pub fn whitespace() -> Parser[Input, Char] {
 
 ///|
 pub fn spaces() -> Parser[Input, Array[Char]] {
-  whitespace().many()
+  ParserRaw::new(input => {
+    let chars = Array::new()
+    let rest = for offset = input.offset {
+      match input.source.get_char(offset) {
+        Some(ch) if ch.is_whitespace() => {
+          chars.push(ch)
+          continue offset + ch.utf16_len()
+        }
+        _ => break { ..input, offset }
+      }
+    }
+    Ok((chars, rest))
+  })
 }
 
 /// --- Pre-built convenience parsers --------------------------------------

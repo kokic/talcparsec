@@ -154,3 +154,57 @@ test "bench choice failure alternatives=26" (it : @bench.T) {
   let parser = character_choice("abcdefghijklmnopqrstuvwxyz")
   it.bench(() => it.keep(parser.parse(@talcparsec.Input::new("!"))))
 }
+
+///|
+test "bench skip_spaces n=4096" (it : @bench.T) {
+  let input = repeat_text(" ", 4096) + "x"
+  let parser = @talcparsec.skip_spaces().then(@talcparsec.char('x'))
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
+}
+
+///|
+test "bench spaces collect n=4096" (it : @bench.T) {
+  let input = repeat_text(" ", 4096) + "x"
+  let parser = @talcparsec.spaces().then(@talcparsec.char('x'))
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
+}
+
+///|
+test "bench one_of ASCII n=4096" (it : @bench.T) {
+  let input = repeat_text("a", 4096)
+  let parser = @talcparsec.many_chars(@talcparsec.one_of("abcdefghijklmnopqrstuvwxyz"))
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
+}
+
+///|
+test "bench many_chars1 digits n=4096" (it : @bench.T) {
+  let input = repeat_text("1234567890", 410)
+  let parser = @talcparsec.many_chars1(@talcparsec.ascii_digit())
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
+}
+
+///|
+test "bench error position deep line n=2048" (it : @bench.T) {
+  let input = repeat_text("a\n", 2048) + "x"
+  let parser = @talcparsec
+    .satisfy("not x", fn(c) { c != 'x' })
+    .many()
+    .then(@talcparsec.char('y'))
+  match parser.parse(@talcparsec.Input::new(input)) {
+    Err(error) => it.keep(error.offset())
+    Ok(_) => it.keep(0)
+  }
+  it.bench(() => {
+    match parser.parse(@talcparsec.Input::new(input)) {
+      Err(error) => it.keep(error.line())
+      Ok(_) => it.keep(0)
+    }
+  })
+}
+
+///|
+test "bench string multiline n=4096" (it : @bench.T) {
+  let input = repeat_text("a\n", 2048)
+  let parser = @talcparsec.string(input)
+  it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
+}
