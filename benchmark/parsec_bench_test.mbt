@@ -85,16 +85,12 @@ fn character_choice(chars : String) -> @talcparsec.StringParser[Char] {
   let mut parser : @talcparsec.StringParser[Char]? = None
   for ch in chars {
     parser = Some(
-      match parser {
-        None => @talcparsec.char(ch)
-        Some(current) => current.or(@talcparsec.char(ch))
-      },
+      parser.map_or(@talcparsec.char(ch), current => {
+        current.or(@talcparsec.char(ch))
+      }),
     )
   }
-  match parser {
-    Some(parser) => parser
-    None => @talcparsec.fail("character")
-  }
+  parser.unwrap_or(@talcparsec.fail("character"))
 }
 
 ///|
@@ -172,7 +168,9 @@ test "bench spaces collect n=4096" (it : @bench.T) {
 ///|
 test "bench one_of ASCII n=4096" (it : @bench.T) {
   let input = repeat_text("a", 4096)
-  let parser = @talcparsec.many_chars(@talcparsec.one_of("abcdefghijklmnopqrstuvwxyz"))
+  let parser = @talcparsec.many_chars(
+    @talcparsec.one_of("abcdefghijklmnopqrstuvwxyz"),
+  )
   it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }
 
@@ -186,8 +184,7 @@ test "bench many_chars1 digits n=4096" (it : @bench.T) {
 ///|
 test "bench error position deep line n=2048" (it : @bench.T) {
   let input = repeat_text("a\n", 2048) + "x"
-  let parser = @talcparsec
-    .satisfy("not x", fn(c) { c != 'x' })
+  let parser = @talcparsec.satisfy("not x", c => c != 'x')
     .many()
     .then(@talcparsec.char('y'))
   match parser.parse(@talcparsec.Input::new(input)) {

@@ -58,10 +58,7 @@ pub fn Input::peek(self : Input) -> Char? {
 
 ///|
 pub fn Input::next(self : Input) -> (Char, Input)? {
-  match self.peek() {
-    Some(ch) => Some((ch, self.advance(ch)))
-    None => None
-  }
+  self.peek().map(ch => (ch, self.advance(ch)))
 }
 
 ///|
@@ -87,21 +84,16 @@ pub impl Cursor for Input with fn cursor(self) {
 ///|
 pub impl Cursor for Input with fn position(self) {
   let starts = self.line_starts
-  let mut lo = 0
-  let mut hi = starts.length()
-  while lo + 1 < hi {
+  let lo = for lo = 0, hi = starts.length() {
+    guard lo + 1 < hi else { break lo }
     let mid = (lo + hi) / 2
     if starts[mid] <= self.offset {
-      lo = mid
+      continue mid, hi
     } else {
-      hi = mid
+      continue lo, mid
     }
   }
-  {
-    offset: self.offset,
-    line: lo + 1,
-    column: self.offset - starts[lo] + 1,
-  }
+  { offset: self.offset, line: lo + 1, column: self.offset - starts[lo] + 1 }
 }
 
 ///|

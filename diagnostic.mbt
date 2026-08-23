@@ -109,20 +109,8 @@ pub fn ParseError::column(self : ParseError) -> Int {
 
 ///|
 pub fn ParseError::expected(self : ParseError) -> Array[String] {
-  match self.alternatives {
-    Some(alts) =>
-      if self.expected == "" {
-        alts
-      } else {
-        [self.expected, ..alts]
-      }
-    None =>
-      if self.expected == "" {
-        []
-      } else {
-        [self.expected]
-      }
-  }
+  let labels = if self.expected == "" { [] } else { [self.expected] }
+  self.alternatives.map_or(labels, alts => [..labels, ..alts])
 }
 
 ///|
@@ -184,49 +172,45 @@ pub impl Commit for ParseError with fn[I, T] reject_if_committed(
 /// kept for diagnostics) is itself uncommitted. Otherwise a committed
 /// failure at a shallower offset would be silently swallowed by a deeper
 /// uncommitted one, letting choice backtracks that must not happen.
+
 ///|
-fn ParseError::combine_labels(self : ParseError, other : ParseError) -> ParseError {
+fn ParseError::combine_labels(
+  self : ParseError,
+  other : ParseError,
+) -> ParseError {
   let primary = if self.expected != "" { self.expected } else { other.expected }
   let message = if self.message != "" { self.message } else { other.message }
   let committed = self.committed || other.committed
   let mut new_labels : Array[String]? = None
   if self.expected != "" && other.expected != "" {
-    let dup = match self.alternatives {
-      Some(alts) => alts.contains(other.expected)
-      None => false
-    }
-    if !dup {
+    let duplicate = self.alternatives.map_or(false, alts => {
+      alts.contains(other.expected)
+    })
+    if !duplicate {
       new_labels = Some([other.expected])
     }
   }
-  match other.alternatives {
-    Some(other_alts) =>
-      for label in other_alts {
-        if label != primary {
-          let dup = match self.alternatives {
-            Some(alts) => alts.contains(label)
-            None => false
-          }
-          if !dup {
-            match new_labels {
-              Some(labels) => labels.push(label)
-              None => new_labels = Some([label])
-            }
-          }
-        }
+  if other.alternatives is Some(other_alts) {
+    for label in other_alts {
+      guard label != primary else { continue }
+      let duplicate = self.alternatives.map_or(false, alts => {
+        alts.contains(label)
+      })
+      guard !duplicate else { continue }
+      guard new_labels is Some(labels) else {
+        new_labels = Some([label])
+        continue
       }
-    None => ()
+      labels.push(label)
+    }
   }
-  let alternatives = match (self.alternatives, new_labels) {
-    (Some(alts), Some(new)) => {
+  let alternatives = self.alternatives.map_or(new_labels, alts => {
+    new_labels.map_or(Some(alts), new => {
       let combined = alts.copy()
       combined.append(new)
       Some(combined)
-    }
-    (Some(alts), None) => Some(alts)
-    (None, Some(new)) => Some(new)
-    (None, None) => None
-  }
+    })
+  })
   {
     offset: self.offset,
     line: self.line,
@@ -245,17 +229,15 @@ pub impl CanMerge for ParseError with fn merge(self, other) {
   } else if other.offset > self.offset {
     { ..other, committed: self.committed || other.committed }
   } else if other.expected == self.expected {
-    match other.alternatives {
-      None => {
-        let committed = self.committed || other.committed
-        let message = if self.message != "" { self.message } else { other.message }
-        if committed == self.committed && message == self.message {
-          self
-        } else {
-          { ..self, message, committed }
-        }
-      }
-      Some(_) => ParseError::combine_labels(self, other)
+    guard other.alternatives is None else {
+      ParseError::combine_labels(self, other)
+    }
+    let committed = self.committed || other.committed
+    let message = if self.message != "" { self.message } else { other.message }
+    if committed == self.committed && message == self.message {
+      self
+    } else {
+      { ..self, message, committed }
     }
   } else {
     ParseError::combine_labels(self, other)

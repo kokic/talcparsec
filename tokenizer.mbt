@@ -22,15 +22,11 @@ pub fn[I : Cursor, T] satisfy_input(
   predicate : (T) -> Bool,
 ) -> Parser[I, T] {
   ParserRaw::new(input => {
-    match next(input) {
-      Some((token, rest)) => {
-        guard predicate(token) else {
-          Err(ParseFailure::signal(input, name))
-        }
-        Ok((token, rest))
-      }
-      None => Err(ParseFailure::signal(input, name))
+    guard next(input) is Some((token, rest)) else {
+      Err(ParseFailure::signal(input, name))
     }
+    guard predicate(token) else { Err(ParseFailure::signal(input, name)) }
+    Ok((token, rest))
   })
 }
 
@@ -50,10 +46,10 @@ pub fn satisfy(
 ///|
 fn skip_ws(input : Input) -> Input {
   for offset = input.offset {
-    match input.source.get_char(offset) {
-      Some(ch) if ch.is_whitespace() => continue offset + ch.utf16_len()
-      _ => break { ..input, offset }
+    guard input.source.get_char(offset) is Some(ch) && ch.is_whitespace() else {
+      break { ..input, offset, }
     }
+    continue offset + ch.utf16_len()
   }
 }
 
@@ -64,7 +60,7 @@ pub fn skip_spaces() -> Parser[Input, Unit] {
 
 ///|
 fn ascii_table(chars : String) -> FixedArray[Bool] {
-  let table = FixedArray::makei(128, fn(_) { false })
+  let table = FixedArray::makei(128, _ => false)
   for ch in chars.iter() {
     let cp = ch.to_int()
     if cp < 128 {
@@ -77,25 +73,27 @@ fn ascii_table(chars : String) -> FixedArray[Bool] {
 ///|
 pub fn one_of(chars : String) -> Parser[Input, Char] {
   let table = ascii_table(chars)
-  satisfy(
-    "one of \{chars}",
-    ch => {
-      let cp = ch.to_int()
-      if cp < 128 { table[cp] } else { chars.contains_char(ch) }
-    },
-  )
+  satisfy("one of \{chars}", ch => {
+    let cp = ch.to_int()
+    if cp < 128 {
+      table[cp]
+    } else {
+      chars.contains_char(ch)
+    }
+  })
 }
 
 ///|
 pub fn none_of(chars : String) -> Parser[Input, Char] {
   let table = ascii_table(chars)
-  satisfy(
-    "none of \{chars}",
-    ch => {
-      let cp = ch.to_int()
-      if cp < 128 { !table[cp] } else { !chars.contains_char(ch) }
-    },
-  )
+  satisfy("none of \{chars}", ch => {
+    let cp = ch.to_int()
+    if cp < 128 {
+      !table[cp]
+    } else {
+      !chars.contains_char(ch)
+    }
+  })
 }
 
 ///|
@@ -115,10 +113,10 @@ pub fn take_while(
 ) -> Parser[Input, String] {
   ParserRaw::new(input => {
     let end = for offset = input.offset {
-      match input.source.get_char(offset) {
-        Some(ch) if predicate(ch) => continue offset + ch.utf16_len()
-        _ => break offset
+      guard input.source.get_char(offset) is Some(ch) && predicate(ch) else {
+        break offset
       }
+      continue offset + ch.utf16_len()
     }
     guard end > input.offset else { Err(ParseFailure::signal(input, name)) }
     let text = input.source[input.offset:end].to_owned()
@@ -146,13 +144,11 @@ pub fn spaces() -> Parser[Input, Array[Char]] {
   ParserRaw::new(input => {
     let chars = Array::new()
     let rest = for offset = input.offset {
-      match input.source.get_char(offset) {
-        Some(ch) if ch.is_whitespace() => {
-          chars.push(ch)
-          continue offset + ch.utf16_len()
-        }
-        _ => break { ..input, offset }
+      guard input.source.get_char(offset) is Some(ch) && ch.is_whitespace() else {
+        break { ..input, offset, }
       }
+      chars.push(ch)
+      continue offset + ch.utf16_len()
     }
     Ok((chars, rest))
   })
@@ -170,7 +166,9 @@ pub let newline : CParser = char('\r')
   .or(char('\n'))
 
 ///|
-pub let not_newline : CParser = satisfy("not newline", c => c != '\n' && c != '\r')
+pub let not_newline : CParser = satisfy("not newline", c => {
+  c != '\n' && c != '\r'
+})
 
 ///|
 pub let line_content : SParser = many_chars(not_newline)

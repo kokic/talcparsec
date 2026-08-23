@@ -51,14 +51,17 @@ fn tex_math_node_parser() -> @talc.StringParser[TexNode] {
 }
 
 ///|
-fn tex_math_body(closing : String) -> @talc.StringParser[Array[TexNode]] {
+fn tex_body_until(
+  closing : String,
+  node_parser : () -> @talc.StringParser[TexNode],
+) -> @talc.StringParser[Array[TexNode]] {
   @talc.Parser::new(input => {
     let values = Array::new(capacity=4)
     for current = input {
       match @talc.string(closing).run(current) {
         Ok((_, rest)) => break Ok((values, rest))
         Err(_) =>
-          match tex_math_node_parser().run(current) {
+          match node_parser().run(current) {
             Ok((node, rest)) => {
               values.push(node)
               continue rest
@@ -73,10 +76,14 @@ fn tex_math_body(closing : String) -> @talc.StringParser[Array[TexNode]] {
 ///|
 fn tex_math_parser() -> @talc.StringParser[TexNode] {
   @talc.string("$$")
-  .then(tex_math_body("$$"))
+  .then(tex_body_until("$$", tex_math_node_parser))
   .map(nodes => DisplayMath(nodes))
   .attempt()
-  .or(@talc.char('$').then(tex_math_body("$")).map(nodes => InlineMath(nodes)))
+  .or(
+    @talc.char('$')
+    .then(tex_body_until("$", tex_math_node_parser))
+    .map(nodes => InlineMath(nodes)),
+  )
 }
 
 ///|
@@ -109,6 +116,14 @@ fn tex_cmd_spaces() -> @talc.StringParser[Unit] {
 }
 
 ///|
+fn skip_cmd_spaces(input : @talc.Input) -> @talc.Input {
+  match tex_cmd_spaces().run(input) {
+    Ok(pair) => pair.1
+    Err(_) => input
+  }
+}
+
+///|
 fn tex_command_args() -> @talc.StringParser[Array[TexNode]] {
   @talc.spaces().then(
     @talc.Parser::new(input => {
@@ -116,19 +131,11 @@ fn tex_command_args() -> @talc.StringParser[Array[TexNode]] {
       for current = input {
         if tex_command_opt_arg().run(current) is Ok((nodes, rest)) {
           values.push(OptionalArg(nodes))
-          let rest2 = match tex_cmd_spaces().run(rest) {
-            Ok((_, r)) => r
-            Err(_) => rest
-          }
-          continue rest2
+          continue skip_cmd_spaces(rest)
         }
         if tex_command_req_arg().run(current) is Ok((nodes, rest)) {
           values.append(nodes)
-          let rest2 = match tex_cmd_spaces().run(rest) {
-            Ok((_, r)) => r
-            Err(_) => rest
-          }
-          continue rest2
+          continue skip_cmd_spaces(rest)
         }
         guard tex_command_detached_arg().run(current) is Ok((node, rest)) else {
           break Ok((values, current))
@@ -180,32 +187,12 @@ fn tex_escaped_special_parser() -> @talc.StringParser[TexNode] {
 }
 
 ///|
-fn tex_env_body(name : String) -> @talc.StringParser[Array[TexNode]] {
-  @talc.Parser::new(input => {
-    let values = Array::new(capacity=4)
-    for current = input {
-      match @talc.string("\\end{\{name}}").run(current) {
-        Ok((_, rest)) => break Ok((values, rest))
-        Err(_) =>
-          match tex_node_parser().run(current) {
-            Ok((node, rest)) => {
-              values.push(node)
-              continue rest
-            }
-            Err(error) => break Err(error)
-          }
-      }
-    }
-  })
-}
-
-///|
 fn tex_environment_parser() -> @talc.StringParser[TexNode] {
   @talc.string("\\begin{")
   .then(tex_command_name())
   .bind(name => {
     @talc.char('}')
-    .then(tex_env_body(name))
+    .then(tex_body_until("\\end{\{name}}", tex_node_parser))
     .map(nodes => Environment(name, nodes))
   })
 }

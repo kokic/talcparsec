@@ -36,15 +36,14 @@ pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::parse(
   self : ParserRaw[I, T, E],
   input : I,
 ) -> Result[T, E] {
-  match self.run(input) {
-    Ok((value, input)) => {
-      guard input.is_at_eof() else {
-        Err(ParseFailure::signal(input, "end of input"))
-      }
-      Ok(value)
-    }
-    Err(error) => Err(error)
+  let (value, rest) = match self.run(input) {
+    Ok(result) => result
+    Err(error) => return Err(error)
   }
+  guard rest.is_at_eof() else {
+    Err(ParseFailure::signal(rest, "end of input"))
+  }
+  Ok(value)
 }
 
 ///|

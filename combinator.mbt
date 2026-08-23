@@ -54,10 +54,12 @@ pub fn[I, T, U, E] ParserRaw::map(
   f : (T) -> U,
 ) -> ParserRaw[I, U, E] {
   ParserRaw::new(input => {
-    match self.run(input) {
-      Ok((value, rest)) => Ok((f(value), rest))
-      Err(error) => Err(error)
-    }
+    self
+    .run(input)
+    .map(result => {
+      let (value, rest) = result
+      (f(value), rest)
+    })
   })
 }
 
@@ -200,10 +202,12 @@ pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::label(
 #inline
 pub fn[T] ParserRaw::lexeme(self : Parser[Input, T]) -> Parser[Input, T] {
   ParserRaw::new(input => {
-    match self.run(input) {
-      Ok((value, rest)) => Ok((value, skip_ws(rest)))
-      Err(error) => Err(error)
-    }
+    self
+    .run(input)
+    .map(result => {
+      let (value, rest) = result
+      (value, skip_ws(rest))
+    })
   })
 }
 
@@ -303,24 +307,20 @@ pub fn[I : Cursor, T, E : Commit + CanMerge + ParseFailure] choice(
 ) -> ParserRaw[I, T, E] {
   ParserRaw::new(input => {
     let mut merged : E? = None
-    for i = 0; i < parsers.length(); i = i + 1 {
-      match parsers[i].run(input) {
+    for parser in parsers {
+      match parser.run(input) {
         Ok(result) => break Ok(result)
         Err(error) => {
           guard !Commit::is_committed(error) else { break Err(error) }
           // Accumulate: merge the latest error into the running combination.
-          merged = match merged {
-            Some(prev) => Some(CanMerge::merge(prev, error))
-            None => Some(error)
-          }
+          merged = Some(
+            merged.map_or(error, prev => CanMerge::merge(prev, error)),
+          )
           continue
         }
       }
     } nobreak {
-      match merged {
-        Some(err) => Err(err)
-        None => Err(ParseFailure::message(input, "empty choice"))
-      }
+      Err(merged.unwrap_or(ParseFailure::message(input, "empty choice")))
     }
   })
 }

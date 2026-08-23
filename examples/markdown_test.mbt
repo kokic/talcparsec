@@ -144,14 +144,15 @@ let heading : BlockParser = @talc.char('#')
   .bind(hashes => {
     @talc.space.bind(_ => {
       @talc.Parser::new(input => {
-        @talc.line_content
-        .run(input)
-        .bind(pair => {
-          let (text, rest) = pair
-          parse_inlines(text).map(inlines => {
-            (Heading(hashes.length(), inlines), rest)
-          })
-        })
+        let (text, rest) = match @talc.line_content.run(input) {
+          Ok(result) => result
+          Err(error) => return Err(error)
+        }
+        let inlines = match parse_inlines(text) {
+          Ok(inlines) => inlines
+          Err(error) => return Err(error)
+        }
+        Ok((Heading(hashes.length(), inlines), rest))
       })
     })
   })
@@ -221,32 +222,24 @@ fn list_item(marker : Char, indent : Int) -> @talc.StringParser[MdListItem] {
   .skip(@talc.space)
   .bind(_ => {
     @talc.Parser::new(input => {
-      match @talc.line_content.run(input) {
-        Ok((text, rest)) =>
-          match parse_inlines(text) {
-            Ok(content) => {
-              let subitems = sub_list(indent + 2).many()
-              match @talc.newline.run(rest) {
-                Ok((_, after_nl)) =>
-                  subitems
-                  .run(after_nl)
-                  .map(pair => {
-                    let (children, rest2) = pair
-                    ({ content, children }, rest2)
-                  })
-                Err(_) =>
-                  subitems
-                  .run(rest)
-                  .map(pair => {
-                    let (children, rest2) = pair
-                    ({ content, children }, rest2)
-                  })
-              }
-            }
-            Err(e) => Err(e)
-          }
-        Err(e) => Err(e)
+      let (text, rest) = match @talc.line_content.run(input) {
+        Ok(result) => result
+        Err(error) => return Err(error)
       }
+      let content = match parse_inlines(text) {
+        Ok(content) => content
+        Err(error) => return Err(error)
+      }
+      let subitems = sub_list(indent + 2).many()
+      let after_newline = match @talc.newline.run(rest) {
+        Ok(pair) => pair.1
+        Err(_) => rest
+      }
+      let (children, rest2) = match subitems.run(after_newline) {
+        Ok(result) => result
+        Err(error) => return Err(error)
+      }
+      Ok(({ content, children }, rest2))
     })
   })
 }
