@@ -6,7 +6,7 @@
 /// helpers, and pre-built convenience parsers for line-oriented input.
 
 ///|
-pub fn[I : Cursor] eof() -> Parser[I, Unit] {
+pub fn[I : Cursor, E : ParseFailure] eof() -> ParserRaw[I, Unit, E] {
   ParserRaw::new(input => {
     guard input.is_at_eof() else {
       Err(ParseFailure::signal(input, "end of input"))
@@ -16,11 +16,11 @@ pub fn[I : Cursor] eof() -> Parser[I, Unit] {
 }
 
 ///|
-pub fn[I : Cursor, T] satisfy_input(
+pub fn[I : Cursor, T, E : ParseFailure] satisfy_input(
   next : (I) -> (T, I)?,
   name : String,
   predicate : (T) -> Bool,
-) -> Parser[I, T] {
+) -> ParserRaw[I, T, E] {
   ParserRaw::new(input => {
     guard next(input) is Some((token, rest)) else {
       Err(ParseFailure::signal(input, name))
@@ -31,15 +31,15 @@ pub fn[I : Cursor, T] satisfy_input(
 }
 
 ///|
-pub fn char(expected : Char) -> Parser[Input, Char] {
+pub fn[E : ParseFailure] char(expected : Char) -> ParserRaw[Input, Char, E] {
   satisfy("'\{expected}'", ch => ch == expected)
 }
 
 ///|
-pub fn satisfy(
+pub fn[E : ParseFailure] satisfy(
   name : String,
   predicate : (Char) -> Bool,
-) -> Parser[Input, Char] {
+) -> ParserRaw[Input, Char, E] {
   satisfy_input(Input::next, name, predicate)
 }
 
@@ -54,7 +54,7 @@ fn skip_ws(input : Input) -> Input {
 }
 
 ///|
-pub fn skip_spaces() -> Parser[Input, Unit] {
+pub fn[E] skip_spaces() -> ParserRaw[Input, Unit, E] {
   ParserRaw::new(input => Ok(((), skip_ws(input))))
 }
 
@@ -71,7 +71,7 @@ fn ascii_table(chars : String) -> FixedArray[Bool] {
 }
 
 ///|
-pub fn one_of(chars : String) -> Parser[Input, Char] {
+pub fn[E : ParseFailure] one_of(chars : String) -> ParserRaw[Input, Char, E] {
   let table = ascii_table(chars)
   satisfy("one of \{chars}", ch => {
     let cp = ch.to_int()
@@ -84,7 +84,7 @@ pub fn one_of(chars : String) -> Parser[Input, Char] {
 }
 
 ///|
-pub fn none_of(chars : String) -> Parser[Input, Char] {
+pub fn[E : ParseFailure] none_of(chars : String) -> ParserRaw[Input, Char, E] {
   let table = ascii_table(chars)
   satisfy("none of \{chars}", ch => {
     let cp = ch.to_int()
@@ -97,7 +97,9 @@ pub fn none_of(chars : String) -> Parser[Input, Char] {
 }
 
 ///|
-pub fn string(expected : String) -> Parser[Input, String] {
+pub fn[E : ParseFailure] string(
+  expected : String,
+) -> ParserRaw[Input, String, E] {
   ParserRaw::new(input => {
     guard input.remaining().has_prefix(expected.to_string_view()) else {
       Err(ParseFailure::signal(input, "\"\{expected}\""))
@@ -107,10 +109,10 @@ pub fn string(expected : String) -> Parser[Input, String] {
 }
 
 ///|
-pub fn take_while(
+pub fn[E : ParseFailure] take_while(
   name : String,
   predicate : (Char) -> Bool,
-) -> Parser[Input, String] {
+) -> ParserRaw[Input, String, E] {
   ParserRaw::new(input => {
     let end = for offset = input.offset {
       guard input.source.get_char(offset) is Some(ch) && predicate(ch) else {
@@ -125,22 +127,22 @@ pub fn take_while(
 }
 
 ///|
-pub fn ascii_digit() -> Parser[Input, Char] {
+pub fn[E : ParseFailure] ascii_digit() -> ParserRaw[Input, Char, E] {
   satisfy("ASCII digit", Char::is_ascii_digit)
 }
 
 ///|
-pub fn ascii_letter() -> Parser[Input, Char] {
+pub fn[E : ParseFailure] ascii_letter() -> ParserRaw[Input, Char, E] {
   satisfy("ASCII letter", Char::is_ascii_alphabetic)
 }
 
 ///|
-pub fn whitespace() -> Parser[Input, Char] {
+pub fn[E : ParseFailure] whitespace() -> ParserRaw[Input, Char, E] {
   satisfy("whitespace", Char::is_whitespace)
 }
 
 ///|
-pub fn spaces() -> Parser[Input, Array[Char]] {
+pub fn[E] spaces() -> ParserRaw[Input, Array[Char], E] {
   ParserRaw::new(input => {
     let chars = Array::new()
     let rest = for offset = input.offset {

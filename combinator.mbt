@@ -200,7 +200,9 @@ pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::label(
 ///
 /// Returns a parser that runs `self` then skips whitespace.
 #inline
-pub fn[T] ParserRaw::lexeme(self : Parser[Input, T]) -> Parser[Input, T] {
+pub fn[T, E] ParserRaw::lexeme(
+  self : ParserRaw[Input, T, E],
+) -> ParserRaw[Input, T, E] {
   ParserRaw::new(input => {
     self
     .run(input)
@@ -267,14 +269,14 @@ pub fn[I : Cursor, T, R, E : Commit] ParserRaw::before(
 ///|
 /// Standalone version of `Parser::lexeme`.
 #inline
-pub fn[T] lexeme(parser : Parser[Input, T]) -> Parser[Input, T] {
+pub fn[T, E] lexeme(parser : ParserRaw[Input, T, E]) -> ParserRaw[Input, T, E] {
   parser.lexeme()
 }
 
 ///|
 /// Matches an exact string, then skips trailing whitespace.
 #inline
-pub fn symbol(text : String) -> Parser[Input, String] {
+pub fn[E : ParseFailure] symbol(text : String) -> ParserRaw[Input, String, E] {
   string(text).lexeme()
 }
 

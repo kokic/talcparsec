@@ -24,7 +24,7 @@ fn sexp_parser() -> @talc.StringParser[Sexp] {
 
 ///|
 test "parse nested S-expression" {
-  let parser = @talc.spaces().then(sexp_parser())
+  let parser : @talc.StringParser[Sexp] = @talc.spaces().then(sexp_parser())
   let result = parser.parse(@talc.Input::new("  (define (square x) (* x x))  "))
   @test.assert_eq(
     result,

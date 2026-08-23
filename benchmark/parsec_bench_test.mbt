@@ -96,14 +96,14 @@ fn character_choice(chars : String) -> @talcparsec.StringParser[Char] {
 ///|
 test "bench string exact n=4096" (it : @bench.T) {
   let input = repeat_text("a", 4096)
-  let parser = @talcparsec.string(input)
+  let parser : @talcparsec.StringParser[String] = @talcparsec.string(input)
   it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }
 
 ///|
 test "bench take_while ASCII n=4096" (it : @bench.T) {
   let input = repeat_text("a", 4096)
-  let parser = @talcparsec.take_while(
+  let parser : @talcparsec.StringParser[String] = @talcparsec.take_while(
     "ASCII letters",
     Char::is_ascii_alphabetic,
   )
@@ -120,7 +120,9 @@ test "bench sep_by identifiers n=1000" (it : @bench.T) {
 ///|
 test "bench S-expression flat atoms n=1000" (it : @bench.T) {
   let input = make_flat_sexp(1000)
-  let parser = @talcparsec.spaces().then(sexp_parser())
+  let parser : @talcparsec.StringParser[Sexp] = @talcparsec.spaces().then(
+    sexp_parser(),
+  )
   match parser.parse(@talcparsec.Input::new(input)) {
     Ok(value) => it.keep(value.node_count())
     Err(error) => it.keep(error.offset())
@@ -139,7 +141,9 @@ test "bench S-expression nested depth=128" (it : @bench.T) {
 test "bench attempt common prefix n=4096" (it : @bench.T) {
   let prefix = repeat_text("a", 4096)
   let input = prefix + "c"
-  let parser = @talcparsec.string(prefix + "b")
+  let parser : @talcparsec.StringParser[String] = @talcparsec.string(
+      prefix + "b",
+    )
     .attempt()
     .or(@talcparsec.string(input))
   it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
@@ -154,21 +158,25 @@ test "bench choice failure alternatives=26" (it : @bench.T) {
 ///|
 test "bench skip_spaces n=4096" (it : @bench.T) {
   let input = repeat_text(" ", 4096) + "x"
-  let parser = @talcparsec.skip_spaces().then(@talcparsec.char('x'))
+  let parser : @talcparsec.StringParser[Char] = @talcparsec.skip_spaces().then(
+    @talcparsec.char('x'),
+  )
   it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }
 
 ///|
 test "bench spaces collect n=4096" (it : @bench.T) {
   let input = repeat_text(" ", 4096) + "x"
-  let parser = @talcparsec.spaces().then(@talcparsec.char('x'))
+  let parser : @talcparsec.StringParser[Char] = @talcparsec.spaces().then(
+    @talcparsec.char('x'),
+  )
   it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }
 
 ///|
 test "bench one_of ASCII n=4096" (it : @bench.T) {
   let input = repeat_text("a", 4096)
-  let parser = @talcparsec.many_chars(
+  let parser : @talcparsec.StringParser[String] = @talcparsec.many_chars(
     @talcparsec.one_of("abcdefghijklmnopqrstuvwxyz"),
   )
   it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
@@ -177,14 +185,18 @@ test "bench one_of ASCII n=4096" (it : @bench.T) {
 ///|
 test "bench many_chars1 digits n=4096" (it : @bench.T) {
   let input = repeat_text("1234567890", 410)
-  let parser = @talcparsec.many_chars1(@talcparsec.ascii_digit())
+  let parser : @talcparsec.StringParser[String] = @talcparsec.many_chars1(
+    @talcparsec.ascii_digit(),
+  )
   it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }
 
 ///|
 test "bench error position deep line n=2048" (it : @bench.T) {
   let input = repeat_text("a\n", 2048) + "x"
-  let parser = @talcparsec.satisfy("not x", c => c != 'x')
+  let parser : @talcparsec.StringParser[Char] = @talcparsec.satisfy("not x", c => {
+      c != 'x'
+    })
     .many()
     .then(@talcparsec.char('y'))
   match parser.parse(@talcparsec.Input::new(input)) {
@@ -202,6 +214,6 @@ test "bench error position deep line n=2048" (it : @bench.T) {
 ///|
 test "bench string multiline n=4096" (it : @bench.T) {
   let input = repeat_text("a\n", 2048)
-  let parser = @talcparsec.string(input)
+  let parser : @talcparsec.StringParser[String] = @talcparsec.string(input)
   it.bench(() => it.keep(parser.parse(@talcparsec.Input::new(input))))
 }

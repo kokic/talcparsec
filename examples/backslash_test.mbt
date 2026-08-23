@@ -55,10 +55,11 @@ fn tex_body_until(
   closing : String,
   node_parser : () -> @talc.StringParser[TexNode],
 ) -> @talc.StringParser[Array[TexNode]] {
+  let closing_parser : @talc.StringParser[String] = @talc.string(closing)
   @talc.Parser::new(input => {
     let values = Array::new(capacity=4)
     for current = input {
-      match @talc.string(closing).run(current) {
+      match closing_parser.run(current) {
         Ok((_, rest)) => break Ok((values, rest))
         Err(_) =>
           match node_parser().run(current) {
