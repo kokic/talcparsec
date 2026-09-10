@@ -14,7 +14,7 @@ pub fn[I : Cursor, T, E : Commit + ParseFailure] ParserRaw::many(
   self : ParserRaw[I, T, E],
 ) -> ParserRaw[I, Array[T], E] {
   ParserRaw::new(input => {
-    let values = Array::new()
+    let values = Array()
     for rest = input {
       match self.run(rest) {
         Ok((value, next)) => {
@@ -41,7 +41,7 @@ pub fn[I : Cursor, T, E : Commit + ParseFailure] ParserRaw::some(
   ParserRaw::new(input => {
     match self.run(input) {
       Ok((head, rest)) => {
-        let values = Array::new()
+        let values = Array()
         values.push(head)
         for r = rest {
           match self.run(r) {
@@ -82,7 +82,7 @@ pub fn[I : Cursor, T, S, E : Commit + ParseFailure] ParserRaw::sep_by1(
   ParserRaw::new(input => {
     match self.run(input) {
       Ok((head, rest)) => {
-        let values = Array::new()
+        let values = Array()
         values.push(head)
         for r = rest {
           match separator.run(r) {
@@ -122,7 +122,7 @@ pub fn[I : Cursor, T, U, E : Commit + ParseFailure] ParserRaw::many_until(
   terminator : ParserRaw[I, U, E],
 ) -> ParserRaw[I, Array[T], E] {
   ParserRaw::new(input => {
-    let values = Array::new()
+    let values = Array()
     for rest = input {
       match terminator.run(rest) {
         Ok((_, next)) => break Ok((values, next))

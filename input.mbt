@@ -36,7 +36,7 @@ pub(all) struct Input {
 
 ///|
 pub fn Input::new(source : String) -> Input {
-  let line_starts = Array::new()
+  let line_starts = Array()
   line_starts.push(0)
   for offset, ch in source.iter2() {
     if ch == '\n' {

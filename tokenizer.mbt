@@ -144,7 +144,7 @@ pub fn[E : ParseFailure] whitespace() -> ParserRaw[Input, Char, E] {
 ///|
 pub fn[E] spaces() -> ParserRaw[Input, Array[Char], E] {
   ParserRaw::new(input => {
-    let chars = Array::new()
+    let chars = Array()
     let rest = for offset = input.offset {
       guard input.source.get_char(offset) is Some(ch) && ch.is_whitespace() else {
         break { ..input, offset, }

@@ -57,7 +57,7 @@ fn tex_body_until(
 ) -> @talc.StringParser[Array[TexNode]] {
   let closing_parser : @talc.StringParser[String] = @talc.string(closing)
   @talc.Parser::new(input => {
-    let values = Array::new(capacity=4)
+    let values = Array(capacity=4)
     for current = input {
       match closing_parser.run(current) {
         Ok((_, rest)) => break Ok((values, rest))
@@ -128,7 +128,7 @@ fn skip_cmd_spaces(input : @talc.Input) -> @talc.Input {
 fn tex_command_args() -> @talc.StringParser[Array[TexNode]] {
   @talc.spaces().then(
     @talc.Parser::new(input => {
-      let values = Array::new(capacity=4)
+      let values = Array(capacity=4)
       for current = input {
         if tex_command_opt_arg().run(current) is Ok((nodes, rest)) {
           values.push(OptionalArg(nodes))
