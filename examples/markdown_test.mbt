@@ -239,7 +239,7 @@ fn list_item(marker : Char, indent : Int) -> @talc.StringParser[MdListItem] {
         Ok(result) => result
         Err(error) => return Err(error)
       }
-      Ok(({ content, children }, rest2))
+      Ok(({ content, children, }, rest2))
     })
   })
 }
@@ -341,13 +341,13 @@ test "full document" {
       ]),
       FencedCode(Some("python"), "print(\"hello\")\n"),
       UnorderedList([
-        { content: [Plain("first item")], children: [] },
+        { content: [Plain("first item")], children: [], },
         {
           content: [Plain("second with "), Strong([Plain("nested")])],
           children: [
             UnorderedList([
-              { content: [Plain("sub-item")], children: [] },
-              { content: [Plain("another sub")], children: [] },
+              { content: [Plain("sub-item")], children: [], },
+              { content: [Plain("another sub")], children: [], },
             ]),
           ],
         },
@@ -479,8 +479,8 @@ test "unordered list" {
     unordered_list.parse(@talc.Input::new("- one\n- two\n")),
     Ok(
       UnorderedList([
-        { content: [Plain("one")], children: [] },
-        { content: [Plain("two")], children: [] },
+        { content: [Plain("one")], children: [], },
+        { content: [Plain("two")], children: [], },
       ]),
     ),
   )
@@ -492,8 +492,8 @@ test "ordered list" {
     ordered_list.parse(@talc.Input::new("+ first\n+ second\n")),
     Ok(
       OrderedList([
-        { content: [Plain("first")], children: [] },
-        { content: [Plain("second")], children: [] },
+        { content: [Plain("first")], children: [], },
+        { content: [Plain("second")], children: [], },
       ]),
     ),
   )
@@ -509,8 +509,8 @@ test "nested list" {
           content: [Plain("a")],
           children: [
             UnorderedList([
-              { content: [Plain("b")], children: [] },
-              { content: [Plain("c")], children: [] },
+              { content: [Plain("b")], children: [], },
+              { content: [Plain("c")], children: [], },
             ]),
           ],
         },

@@ -122,7 +122,7 @@ pub fn[E : ParseFailure] take_while(
     }
     guard end > input.offset else { Err(ParseFailure::signal(input, name)) }
     let text = input.source[input.offset:end].to_owned()
-    Ok((text, { ..input, offset: end }))
+    Ok((text, { ..input, offset: end, }))
   })
 }
 

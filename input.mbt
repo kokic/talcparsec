@@ -43,7 +43,7 @@ pub fn Input::new(source : String) -> Input {
       line_starts.push(offset + ch.utf16_len())
     }
   }
-  { source, offset: 0, line_starts }
+  { source, offset: 0, line_starts, }
 }
 
 ///|
@@ -63,12 +63,12 @@ pub fn Input::next(self : Input) -> (Char, Input)? {
 
 ///|
 pub fn Input::advance(self : Input, ch : Char) -> Input {
-  { ..self, offset: self.offset + ch.utf16_len() }
+  { ..self, offset: self.offset + ch.utf16_len(), }
 }
 
 ///|
 pub fn Input::advance_string(self : Input, text : String) -> Input {
-  { ..self, offset: self.offset + text.length() }
+  { ..self, offset: self.offset + text.length(), }
 }
 
 ///|
@@ -93,7 +93,7 @@ pub impl Cursor for Input with fn position(self) {
       continue lo, mid
     }
   }
-  { offset: self.offset, line: lo + 1, column: self.offset - starts[lo] + 1 }
+  { offset: self.offset, line: lo + 1, column: self.offset - starts[lo] + 1, }
 }
 
 ///|

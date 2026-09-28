@@ -146,12 +146,12 @@ pub impl Commit for ParseError with fn is_committed(self) {
 
 ///|
 pub impl Commit for ParseError with fn mark_committed(self) {
-  { ..self, committed: true }
+  { ..self, committed: true, }
 }
 
 ///|
 pub impl Commit for ParseError with fn clear_commit(self) {
-  { ..self, committed: false }
+  { ..self, committed: false, }
 }
 
 ///|
@@ -225,9 +225,9 @@ fn ParseError::combine_labels(
 ///|
 pub impl CanMerge for ParseError with fn merge(self, other) {
   if self.offset > other.offset {
-    { ..self, committed: self.committed || other.committed }
+    { ..self, committed: self.committed || other.committed, }
   } else if other.offset > self.offset {
-    { ..other, committed: self.committed || other.committed }
+    { ..other, committed: self.committed || other.committed, }
   } else if other.expected == self.expected {
     guard other.alternatives is None else {
       ParseError::combine_labels(self, other)
@@ -237,7 +237,7 @@ pub impl CanMerge for ParseError with fn merge(self, other) {
     if committed == self.committed && message == self.message {
       self
     } else {
-      { ..self, message, committed }
+      { ..self, message, committed, }
     }
   } else {
     ParseError::combine_labels(self, other)
