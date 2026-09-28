@@ -1,4 +1,25 @@
 ///|
+using @talcparsec {
+  type Input,
+  type Parser,
+  type ParserRaw,
+  type ParseError,
+  char,
+  ascii_digit,
+  ascii_letter,
+  string,
+  symbol,
+  satisfy,
+  take_while,
+  many_chars,
+  many_chars1,
+  choice,
+  eof,
+  pure,
+  rest_of_line,
+}
+
+///|
 test "monadic bind composes parsers" {
   let parser : Parser[Input, Char] = char('a').bind(_ => ascii_digit())
   let result = parser.parse(Input::new("a7"))
