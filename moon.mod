@@ -12,4 +12,4 @@ keywords = [ "parser", "parsec", "combinator", "pratt" ]
 
 description = "A fast, trait-driven parser combinator library for MoonBit with explicit backtracking and structured diagnostics."
 
-preferred_target = "wasm-gc"
+preferred_target = "wasm"
