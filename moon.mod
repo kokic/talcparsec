@@ -1,6 +1,6 @@
 name = "kokic/talcparsec"
 
-version = "0.3.1"
+version = "0.4.0"
 
 readme = "README.md"
 
@@ -10,6 +10,6 @@ license = "AGPL-3.0"
 
 keywords = [ "parser", "parsec", "combinator", "pratt" ]
 
-description = ""
+description = "A fast, trait-driven parser combinator library for MoonBit with explicit backtracking and structured diagnostics."
 
 preferred_target = "wasm-gc"

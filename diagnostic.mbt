@@ -295,16 +295,10 @@ pub extend ParseError with ParseFailure::{signal}
 ///|
 pub fn ParseError::to_string(self : ParseError) -> String {
   let base = "parse error at \{self.line}:\{self.column}"
-  if self.message != "" {
-    "\{base}: \{self.message}"
-  } else {
-    let labels = self.expected()
-    if labels.length() > 0 {
-      "\{base}: expected \{labels.join(" or ")}"
-    } else {
-      base
-    }
-  }
+  guard self.message == "" else { "\{base}: \{self.message}" }
+  let labels = self.expected()
+  guard labels.length() > 0 else { base }
+  "\{base}: expected \{labels.join(" or ")}"
 }
 
 ///|
