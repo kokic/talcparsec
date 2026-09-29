@@ -8,6 +8,7 @@
 
 ///|
 /// A source position reported by parser diagnostics.
+#valtype
 pub(all) struct Position {
   offset : Int
   line : Int
@@ -28,6 +29,7 @@ pub(open) trait Cursor {
 /// Immutable character input cursor.
 /// Offsets are UTF-16 code unit offsets, matching MoonBit string indexing.
 /// Line/column positions are computed lazily from `line_starts` on demand.
+#valtype
 pub(all) struct Input {
   source : String
   offset : Int
@@ -36,14 +38,7 @@ pub(all) struct Input {
 
 ///|
 pub fn Input::new(source : String) -> Input {
-  let line_starts = Array()
-  line_starts.push(0)
-  for offset, ch in source.iter2() {
-    if ch == '\n' {
-      line_starts.push(offset + ch.utf16_len())
-    }
-  }
-  { source, offset: 0, line_starts }
+  { source, offset: 0, line_starts: scan_line_starts(source), }
 }
 
 ///|
@@ -63,12 +58,12 @@ pub fn Input::next(self : Input) -> (Char, Input)? {
 
 ///|
 pub fn Input::advance(self : Input, ch : Char) -> Input {
-  { ..self, offset: self.offset + ch.utf16_len() }
+  { ..self, offset: self.offset + ch.utf16_len(), }
 }
 
 ///|
 pub fn Input::advance_string(self : Input, text : String) -> Input {
-  { ..self, offset: self.offset + text.length() }
+  { ..self, offset: self.offset + text.length(), }
 }
 
 ///|
@@ -93,7 +88,7 @@ pub impl Cursor for Input with fn position(self) {
       continue lo, mid
     }
   }
-  { offset: self.offset, line: lo + 1, column: self.offset - starts[lo] + 1 }
+  { offset: self.offset, line: lo + 1, column: self.offset - starts[lo] + 1, }
 }
 
 ///|
@@ -131,3 +126,41 @@ pub extend Position with Eq::{not_equal, equal}
 
 ///|
 pub extend Position with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
+// JS has no native V128 operations. A compile-time constant removes SIMD
+// branches there while keeping the same scalar tail and Unicode handling.
+#cfg(target="js")
+const UseSimd = false
+
+///|
+#cfg(not(target="js"))
+const UseSimd = true
+
+///|
+/// Scan UTF-16 directly: LF is a single code unit, even next to surrogates.
+/// Every vector load is guarded by the number of remaining code units.
+#warnings("-alert_experimental")
+fn scan_line_starts(source : String) -> Array[Int] {
+  let starts = [0]
+  let length = source.length()
+  let tail = for offset = 0 {
+    guard UseSimd && offset <= length - 8 else { break offset }
+    let block = @v128.v128_load_i16x8(source, offset)
+    let newline = @v128.i16x8_splat(10)
+    if @v128.v128_any_true(@v128.i16x8_eq(block, newline)) {
+      for index in offset..<(offset + 8) {
+        if source[index] == 10 {
+          starts.push(index + 1)
+        }
+      }
+    }
+    continue offset + 8
+  }
+  for index in tail..<length {
+    if source[index] == 10 {
+      starts.push(index + 1)
+    }
+  }
+  starts
+}

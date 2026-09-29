@@ -77,7 +77,19 @@ pub fn[I : Cursor, T, U, E : Commit] ParserRaw::then(
   self : ParserRaw[I, T, E],
   next : ParserRaw[I, U, E],
 ) -> ParserRaw[I, U, E] {
-  self.bind(_ => next)
+  ParserRaw::new(input => {
+    match self.run(input) {
+      Ok((_, rest)) =>
+        match next.run(rest) {
+          Ok(result) => Ok(result)
+          Err(error) => {
+            guard !rest.same_cursor(input) else { Err(error) }
+            Err(Commit::mark_committed(error))
+          }
+        }
+      Err(error) => Err(error)
+    }
+  })
 }
 
 ///|
@@ -94,7 +106,19 @@ pub fn[I : Cursor, T, U, E : Commit] ParserRaw::skip(
   self : ParserRaw[I, T, E],
   next : ParserRaw[I, U, E],
 ) -> ParserRaw[I, T, E] {
-  self.bind(value => next.map(_ => value))
+  ParserRaw::new(input => {
+    match self.run(input) {
+      Ok((value, rest)) =>
+        match next.run(rest) {
+          Ok((_, after)) => Ok((value, after))
+          Err(error) => {
+            guard !rest.same_cursor(input) else { Err(error) }
+            Err(Commit::mark_committed(error))
+          }
+        }
+      Err(error) => Err(error)
+    }
+  })
 }
 
 ///|
@@ -116,7 +140,7 @@ pub fn[I, T, E : Commit + CanMerge] ParserRaw::or(
 ) -> ParserRaw[I, T, E] {
   ParserRaw::new(input => {
     match self.run(input) {
-      Ok((value, rest)) => Ok((value, rest))
+      Ok(_) as success => success
       Err(first) if Commit::is_committed(first) => Err(first)
       Err(first) =>
         other.run(input).map_err(second => CanMerge::merge(first, second))

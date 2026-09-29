@@ -1,4 +1,5 @@
 import {
   "moonbitlang/core/test",
   "moonbitlang/core/debug",
+  "moonbitlang/core/v128",
 }

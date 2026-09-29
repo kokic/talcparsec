@@ -36,20 +36,53 @@ pub fn[E : ParseFailure] char(expected : Char) -> ParserRaw[Input, Char, E] {
 }
 
 ///|
+#inline
 pub fn[E : ParseFailure] satisfy(
   name : String,
   predicate : (Char) -> Bool,
 ) -> ParserRaw[Input, Char, E] {
-  satisfy_input(Input::next, name, predicate)
+  ParserRaw::new(input => {
+    guard input.peek() is Some(ch) && predicate(ch) else {
+      Err(ParseFailure::signal(input, name))
+    }
+    Ok((ch, input.advance(ch)))
+  })
 }
 
 ///|
+/// Skip complete ASCII whitespace blocks; scalar decoding handles Unicode
+/// whitespace, short tails and the first non-whitespace character.
+#warnings("-alert_experimental")
 fn skip_ws(input : Input) -> Input {
+  let source = input.source
+  let length = source.length()
   for offset = input.offset {
-    guard input.source.get_char(offset) is Some(ch) && ch.is_whitespace() else {
+    guard source.get_char(offset) is Some(ch) && ch.is_whitespace() else {
       break { ..input, offset, }
     }
-    continue offset + ch.utf16_len()
+    let next = if UseSimd {
+      let space = @v128.i16x8_splat(32)
+      let tab = @v128.i16x8_splat(9)
+      let carriage_return = @v128.i16x8_splat(13)
+      for next = offset + ch.utf16_len(); next <= length - 8; {
+        let block = @v128.v128_load_i16x8(source, next)
+        let spaces = @v128.i16x8_eq(block, space)
+        let controls = @v128.v128_and_(
+          @v128.i16x8_ge_u(block, tab),
+          @v128.i16x8_le_u(block, carriage_return),
+        )
+        let whitespace = @v128.v128_or_(spaces, controls)
+        guard !@v128.v128_any_true(@v128.v128_not(whitespace)) else {
+          break next
+        }
+        continue next + 8
+      } nobreak {
+        next
+      }
+    } else {
+      offset + ch.utf16_len()
+    }
+    continue next
   }
 }
 
@@ -59,15 +92,43 @@ pub fn[E] skip_spaces() -> ParserRaw[Input, Unit, E] {
 }
 
 ///|
-fn ascii_table(chars : String) -> FixedArray[Bool] {
-  let table = FixedArray::makei(128, _ => false)
-  for ch in chars.iter() {
-    let cp = ch.to_int()
-    if cp < 128 {
-      table[cp] = true
+#valtype
+priv struct AsciiTable {
+  bits_0_31 : UInt
+  bits_32_63 : UInt
+  bits_64_95 : UInt
+  bits_96_127 : UInt
+}
+
+///|
+fn ascii_table(chars : String) -> AsciiTable {
+  let mut bits_0_31 = 0U
+  let mut bits_32_63 = 0U
+  let mut bits_64_95 = 0U
+  let mut bits_96_127 = 0U
+  for offset in 0..<chars.length() {
+    let cp = chars[offset].to_int()
+    let bit = 1U << (cp & 31)
+    match cp >> 5 {
+      0 => bits_0_31 = bits_0_31 | bit
+      1 => bits_32_63 = bits_32_63 | bit
+      2 => bits_64_95 = bits_64_95 | bit
+      3 => bits_96_127 = bits_96_127 | bit
+      _ => ()
     }
   }
-  table
+  { bits_0_31, bits_32_63, bits_64_95, bits_96_127, }
+}
+
+///|
+fn AsciiTable::contains(self : AsciiTable, cp : Int) -> Bool {
+  let bits = match cp >> 5 {
+    0 => self.bits_0_31
+    1 => self.bits_32_63
+    2 => self.bits_64_95
+    _ => self.bits_96_127
+  }
+  (bits & (1U << (cp & 31))) != 0U
 }
 
 ///|
@@ -76,7 +137,7 @@ pub fn[E : ParseFailure] one_of(chars : String) -> ParserRaw[Input, Char, E] {
   satisfy("one of \{chars}", ch => {
     let cp = ch.to_int()
     if cp < 128 {
-      table[cp]
+      table.contains(cp)
     } else {
       chars.contains_char(ch)
     }
@@ -89,7 +150,7 @@ pub fn[E : ParseFailure] none_of(chars : String) -> ParserRaw[Input, Char, E] {
   satisfy("none of \{chars}", ch => {
     let cp = ch.to_int()
     if cp < 128 {
-      !table[cp]
+      !table.contains(cp)
     } else {
       !chars.contains_char(ch)
     }
@@ -122,7 +183,7 @@ pub fn[E : ParseFailure] take_while(
     }
     guard end > input.offset else { Err(ParseFailure::signal(input, name)) }
     let text = input.source[input.offset:end].to_owned()
-    Ok((text, { ..input, offset: end }))
+    Ok((text, { ..input, offset: end, }))
   })
 }
 

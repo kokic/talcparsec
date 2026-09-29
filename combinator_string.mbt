@@ -30,10 +30,31 @@ pub fn[U, E : Commit] ParserRaw::string_map(
 /// into a `String`.
 ///
 /// Unlike `take_while`, succeeds on zero matches (returns empty string).
+#inline
 pub fn[E : Commit + ParseFailure] many_chars(
   parser : ParserRaw[Input, Char, E],
 ) -> ParserRaw[Input, String, E] {
-  parser.many().map(chars => String::from_array(chars))
+  ParserRaw::new(input => {
+    let chars = StringBuilder()
+    for rest = input {
+      match parser.run(rest) {
+        Ok((ch, next)) => {
+          guard !next.same_cursor(rest) else {
+            break Err(
+              ParseFailure::message(rest, "many parser accepted empty input"),
+            )
+          }
+          chars.write_char(ch)
+          continue next
+        }
+        Err(error) =>
+          break Commit::reject_if_committed(error, chars, rest).map(result => {
+            let (chars, rest) = result
+            (chars.to_string(), rest)
+          })
+      }
+    }
+  })
 }
 
 ///|
@@ -45,5 +66,30 @@ pub fn[E : Commit + ParseFailure] many_chars(
 pub fn[E : Commit + ParseFailure] many_chars1(
   parser : ParserRaw[Input, Char, E],
 ) -> ParserRaw[Input, String, E] {
-  parser.some().map(chars => String::from_array(chars))
+  ParserRaw::new(input => {
+    let (head, rest) = match parser.run(input) {
+      Ok(result) => result
+      Err(error) => return Err(error)
+    }
+    let chars = StringBuilder()
+    chars.write_char(head)
+    for rest = rest {
+      match parser.run(rest) {
+        Ok((ch, next)) => {
+          guard !next.same_cursor(rest) else {
+            break Err(
+              ParseFailure::message(rest, "many parser accepted empty input"),
+            )
+          }
+          chars.write_char(ch)
+          continue next
+        }
+        Err(error) =>
+          break Commit::reject_if_committed(error, chars, rest).map(result => {
+            let (chars, rest) = result
+            (chars.to_string(), rest)
+          })
+      }
+    }
+  })
 }
