@@ -18,11 +18,11 @@ pub type SParser = StringParser[String]
 ///|
 /// Maps a `char` parser's result to a `String` before applying `f`.
 #inline
-pub fn[U, E : Commit] ParserRaw::string_map(
+pub fn[U, E] ParserRaw::string_map(
   self : ParserRaw[Input, Char, E],
   f : (String) -> U,
 ) -> ParserRaw[Input, U, E] {
-  self.bind(value => pure(f(value.to_string())))
+  self.map(value => f(value.to_string()))
 }
 
 ///|

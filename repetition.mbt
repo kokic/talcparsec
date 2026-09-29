@@ -117,6 +117,9 @@ pub fn[I : Cursor, T, S, E : Commit + ParseFailure] ParserRaw::sep_by1(
 
 ///|
 /// Keeps running `self` until `terminator` succeeds.
+/// A committed terminator failure propagates; wrap it in `attempt` to
+/// allow the body parser to retry that input. A non-committed body failure
+/// returns the values collected so far, even without a terminator.
 pub fn[I : Cursor, T, U, E : Commit + ParseFailure] ParserRaw::many_until(
   self : ParserRaw[I, T, E],
   terminator : ParserRaw[I, U, E],
@@ -126,6 +129,7 @@ pub fn[I : Cursor, T, U, E : Commit + ParseFailure] ParserRaw::many_until(
     for rest = input {
       match terminator.run(rest) {
         Ok((_, next)) => break Ok((values, next))
+        Err(error) if Commit::is_committed(error) => break Err(error)
         Err(_) =>
           match self.run(rest) {
             Ok((value, next)) => {

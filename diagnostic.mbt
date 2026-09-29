@@ -2,8 +2,7 @@
 /// Error model: traits and concrete type for parse diagnostics.
 ///
 /// Defines the trait hierarchy `Commit` → `CanMerge` → `Positioned` → `ParseFailure`
-/// and the default `ParseError` struct. The generic function `commit_then_merge`
-/// captures the core choice-combinator logic independently of the concrete error type.
+/// and the default `ParseError` struct.
 
 ///|
 /// Types that track parse commitment — when a parser consumes input
@@ -146,12 +145,12 @@ pub impl Commit for ParseError with fn is_committed(self) {
 
 ///|
 pub impl Commit for ParseError with fn mark_committed(self) {
-  { ..self, committed: true }
+  { ..self, committed: true, }
 }
 
 ///|
 pub impl Commit for ParseError with fn clear_commit(self) {
-  { ..self, committed: false }
+  { ..self, committed: false, }
 }
 
 ///|
@@ -182,7 +181,7 @@ fn ParseError::combine_labels(
   let message = if self.message != "" { self.message } else { other.message }
   let committed = self.committed || other.committed
   let mut new_labels : Array[String]? = None
-  if self.expected != "" && other.expected != "" {
+  if other.expected != "" && other.expected != primary {
     let duplicate = self.alternatives.map_or(false, alts => {
       alts.contains(other.expected)
     })
@@ -194,8 +193,9 @@ fn ParseError::combine_labels(
     for label in other_alts {
       guard label != primary else { continue }
       let duplicate = self.alternatives.map_or(false, alts => {
-        alts.contains(label)
-      })
+          alts.contains(label)
+        }) ||
+        new_labels.map_or(false, labels => labels.contains(label))
       guard !duplicate else { continue }
       guard new_labels is Some(labels) else {
         new_labels = Some([label])
@@ -225,9 +225,9 @@ fn ParseError::combine_labels(
 ///|
 pub impl CanMerge for ParseError with fn merge(self, other) {
   if self.offset > other.offset {
-    { ..self, committed: self.committed || other.committed }
+    { ..self, committed: self.committed || other.committed, }
   } else if other.offset > self.offset {
-    { ..other, committed: self.committed || other.committed }
+    { ..other, committed: self.committed || other.committed, }
   } else if other.expected == self.expected {
     guard other.alternatives is None else {
       ParseError::combine_labels(self, other)
@@ -237,7 +237,7 @@ pub impl CanMerge for ParseError with fn merge(self, other) {
     if committed == self.committed && message == self.message {
       self
     } else {
-      { ..self, message, committed }
+      { ..self, message, committed, }
     }
   } else {
     ParseError::combine_labels(self, other)
@@ -299,22 +299,4 @@ pub fn ParseError::to_string(self : ParseError) -> String {
   let labels = self.expected()
   guard labels.length() > 0 else { base }
   "\{base}: expected \{labels.join(" or ")}"
-}
-
-///|
-/// Generic error combinator usable with any `E : Commit + CanMerge`.
-fn[E : Commit + CanMerge] commit_then_merge(first : E, second : E) -> E {
-  guard !Commit::is_committed(first) else { first }
-  CanMerge::merge(first, second)
-}
-
-///|
-test "trait-based generic error handling" {
-  let err_a = ParseError::new(Input::new("x"), "a")
-  let err_b = ParseError::new(Input::new("y"), "b")
-  let committed = ParseError::new(Input::new("x"), "a").with_commit()
-  let r1 = commit_then_merge(committed, err_b)
-  @test.assert_eq(Commit::is_committed(r1), true)
-  let r2 = commit_then_merge(err_a, err_b)
-  @test.assert_eq(Positioned::error_offset(r2), 0)
 }
