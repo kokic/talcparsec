@@ -17,9 +17,6 @@ talcparsec builds hand-written recursive-descent parsers out of small composable
 moon add kokic/talcparsec
 ```
 
-The SIMD implementation uses the experimental `moonbitlang/core/v128` APIs
-available in MoonBit 0.1.20260920. JavaScript uses scalar scanning.
-
 ## Design
 
 ### Trait-based error hierarchy
