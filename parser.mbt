@@ -8,6 +8,7 @@
 ///|
 /// Generic parser type parameterised by input `I`, result `T`, and error `E`.
 /// The convenience alias `Parser[I, T]` fixes `E = ParseError` for common use.
+#valtype
 pub(all) struct ParserRaw[I, T, E] {
   parse_fn : (I) -> Result[(T, I), E]
 }

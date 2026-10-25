@@ -9,7 +9,7 @@ talcparsec builds hand-written recursive-descent parsers out of small composable
 - **Commit-aware backtracking** — consuming input commits a parse attempt; once a branch commits, alternatives are no longer tried. Backtracking is opt-in via `attempt`, so failures never re-scan input silently.
 - **Good errors by default** — failures carry the furthest position reached, and alternatives at the same position merge their expected labels. Every error is structured data (offset, line, column, expected labels, committed flag), so diagnostics are easy to render or recover from.
 - **Open error model** — `ParserRaw[I, T, E]` is generic over input, result, and error type. A custom error type only needs the `Commit + CanMerge + Positioned + ParseFailure` traits; the full combinator stack and the primitive parsers work with any `E`.
-- **Fast on hot paths** — tokenizer loops avoid allocation, line and column positions are computed lazily from a line-start table, and all offsets are UTF-16 code units matching MoonBit string indexing.
+- **Fast on hot paths** — value-type cursors, SIMD scanning of UTF-16 line starts and ASCII whitespace, compact character-set bitmaps, and direct string accumulation reduce allocation. Line and column positions are computed lazily from a line-start table, and all offsets are UTF-16 code units matching MoonBit string indexing.
 
 ## Add as a dependency
 

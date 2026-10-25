@@ -280,7 +280,11 @@ fn block() -> BlockParser {
 }
 
 ///|
-let block_sep : @talc.StringParser[Array[Unit]] = blank_line.some()
+/// Leave trailing blank lines for `blanks`; only separate actual blocks.
+let block_sep : @talc.StringParser[Array[Unit]] = blank_line
+  .some()
+  .skip(@talc.eof().not_followed_by("end of input"))
+  .attempt()
 
 ///|
 let blanks : @talc.StringParser[Array[Unit]] = blank_line.many()
