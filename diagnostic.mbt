@@ -180,37 +180,45 @@ fn ParseError::combine_labels(
   let primary = if self.expected != "" { self.expected } else { other.expected }
   let message = if self.message != "" { self.message } else { other.message }
   let committed = self.committed || other.committed
+  let capacity = self.alternatives.map_or(0, alts => alts.length()) +
+    other.alternatives.map_or(0, alts => alts.length()) +
+    1
   let mut new_labels : Array[String]? = None
   if other.expected != "" && other.expected != primary {
-    let duplicate = self.alternatives.map_or(false, alts => {
+    let duplicate = self.alternatives is Some(alts) &&
       alts.contains(other.expected)
-    })
     if !duplicate {
-      new_labels = Some([other.expected])
+      let labels = Array(capacity~)
+      if self.alternatives is Some(alts) {
+        labels.append(alts)
+      }
+      labels.push(other.expected)
+      new_labels = Some(labels)
     }
   }
   if other.alternatives is Some(other_alts) {
     for label in other_alts {
       guard label != primary else { continue }
-      let duplicate = self.alternatives.map_or(false, alts => {
-          alts.contains(label)
-        }) ||
-        new_labels.map_or(false, labels => labels.contains(label))
-      guard !duplicate else { continue }
       guard new_labels is Some(labels) else {
-        new_labels = Some([label])
+        guard !(self.alternatives is Some(alts) && alts.contains(label)) else {
+          continue
+        }
+        let labels = Array(capacity~)
+        if self.alternatives is Some(alts) {
+          labels.append(alts)
+        }
+        labels.push(label)
+        new_labels = Some(labels)
         continue
       }
+      guard !labels.contains(label) else { continue }
       labels.push(label)
     }
   }
-  let alternatives = self.alternatives.map_or(new_labels, alts => {
-    new_labels.map_or(Some(alts), new => {
-      let combined = alts.copy()
-      combined.append(new)
-      Some(combined)
-    })
-  })
+  let alternatives = match new_labels {
+    Some(_) => new_labels
+    None => self.alternatives
+  }
   {
     offset: self.offset,
     line: self.line,

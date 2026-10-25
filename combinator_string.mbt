@@ -34,27 +34,7 @@ pub fn[U, E] ParserRaw::string_map(
 pub fn[E : Commit + ParseFailure] many_chars(
   parser : ParserRaw[Input, Char, E],
 ) -> ParserRaw[Input, String, E] {
-  ParserRaw::new(input => {
-    let chars = StringBuilder()
-    for rest = input {
-      match parser.run(rest) {
-        Ok((ch, next)) => {
-          guard !next.same_cursor(rest) else {
-            break Err(
-              ParseFailure::message(rest, "many parser accepted empty input"),
-            )
-          }
-          chars.write_char(ch)
-          continue next
-        }
-        Err(error) =>
-          break Commit::reject_if_committed(error, chars, rest).map(result => {
-            let (chars, rest) = result
-            (chars.to_string(), rest)
-          })
-      }
-    }
-  })
+  ParserRaw::new(input => collect_chars(parser, input, StringBuilder()))
 }
 
 ///|
@@ -67,29 +47,39 @@ pub fn[E : Commit + ParseFailure] many_chars1(
   parser : ParserRaw[Input, Char, E],
 ) -> ParserRaw[Input, String, E] {
   ParserRaw::new(input => {
-    let (head, rest) = match parser.run(input) {
-      Ok(result) => result
-      Err(error) => return Err(error)
-    }
-    let chars = StringBuilder()
-    chars.write_char(head)
-    for rest = rest {
-      match parser.run(rest) {
-        Ok((ch, next)) => {
-          guard !next.same_cursor(rest) else {
-            break Err(
-              ParseFailure::message(rest, "many parser accepted empty input"),
-            )
-          }
-          chars.write_char(ch)
-          continue next
-        }
-        Err(error) =>
-          break Commit::reject_if_committed(error, chars, rest).map(result => {
-            let (chars, rest) = result
-            (chars.to_string(), rest)
-          })
+    match parser.run(input) {
+      Ok((head, rest)) => {
+        let chars = StringBuilder()
+        chars.write_char(head)
+        collect_chars(parser, rest, chars)
       }
+      Err(error) => Err(error)
     }
   })
+}
+
+///|
+fn[E : Commit + ParseFailure] collect_chars(
+  parser : ParserRaw[Input, Char, E],
+  input : Input,
+  chars : StringBuilder,
+) -> Result[(String, Input), E] {
+  for rest = input {
+    match parser.run(rest) {
+      Ok((value, next)) => {
+        guard !next.same_cursor(rest) else {
+          break Err(
+            ParseFailure::message(rest, "many parser accepted empty input"),
+          )
+        }
+        chars.write_char(value)
+        continue next
+      }
+      Err(error) =>
+        break Commit::reject_if_committed(error, chars, rest).map(result => {
+          let (chars, rest) = result
+          (chars.to_string(), rest)
+        })
+    }
+  }
 }

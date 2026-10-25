@@ -70,7 +70,7 @@ pub fn[I : Cursor, T, S, E : Commit + CanMerge + ParseFailure] ParserRaw::sep_by
   self : ParserRaw[I, T, E],
   sep : ParserRaw[I, S, E],
 ) -> ParserRaw[I, Array[T], E] {
-  self.sep_by1(sep).or(pure([]))
+  self.sep_by1(sep).or(ParserRaw::new(input => Ok(([], input))))
 }
 
 ///|

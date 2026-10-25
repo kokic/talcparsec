@@ -42,7 +42,9 @@ pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::parse(
     Err(error) => return Err(error)
   }
   guard rest.is_at_eof() else {
-    Err(ParseFailure::signal(rest, "end of input"))
+    let error = ParseFailure::signal(rest, "end of input")
+    guard !rest.same_cursor(input) else { Err(error) }
+    Err(Commit::mark_committed(error))
   }
   Ok(value)
 }

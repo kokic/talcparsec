@@ -53,7 +53,8 @@ pub fn Input::peek(self : Input) -> Char? {
 
 ///|
 pub fn Input::next(self : Input) -> (Char, Input)? {
-  self.peek().map(ch => (ch, self.advance(ch)))
+  guard self.peek() is Some(ch) else { None }
+  Some((ch, self.advance(ch)))
 }
 
 ///|
@@ -128,14 +129,20 @@ pub extend Position with Eq::{not_equal, equal}
 pub extend Position with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
-// JS has no native V128 operations. A compile-time constant removes SIMD
-// branches there while keeping the same scalar tail and Unicode handling.
-#cfg(target="js")
+#cfg(not(any(target="wasm", target="wasm-gc")))
 const UseSimd = false
 
 ///|
-#cfg(not(target="js"))
+#cfg(any(target="wasm", target="wasm-gc"))
 const UseSimd = true
+
+///|
+#cfg(target="wasm")
+const UseSimdLineScan = true
+
+///|
+#cfg(not(target="wasm"))
+const UseSimdLineScan = false
 
 ///|
 /// Scan UTF-16 directly: LF is a single code unit, even next to surrogates.
@@ -145,7 +152,7 @@ fn scan_line_starts(source : String) -> Array[Int] {
   let starts = [0]
   let length = source.length()
   let tail = for offset = 0 {
-    guard UseSimd && offset <= length - 8 else { break offset }
+    guard UseSimdLineScan && offset <= length - 8 else { break offset }
     let block = @v128.v128_load_i16x8(source, offset)
     let newline = @v128.i16x8_splat(10)
     if @v128.v128_any_true(@v128.i16x8_eq(block, newline)) {

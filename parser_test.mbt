@@ -16,6 +16,7 @@ using @talcparsec {
   choice,
   eof,
   pure,
+  fail,
   rest_of_line,
 }
 
@@ -243,4 +244,292 @@ test "line parsers handle CRLF" {
     }
     Err(_) => @test.fail("expected CRLF line to parse")
   }
+}
+
+///|
+test "line positions use UTF-16 offsets after supplementary characters" {
+  let input = Input::new("😀\nx\r\n😺\ny")
+  @test.assert_eq(input.advance('😀').position(), {
+    offset: 2,
+    line: 1,
+    column: 3,
+  })
+  @test.assert_eq(input.advance_string("😀\n").position(), {
+    offset: 3,
+    line: 2,
+    column: 1,
+  })
+  @test.assert_eq(input.advance_string("😀\nx\r\n😺\n").position(), {
+    offset: 9,
+    line: 4,
+    column: 1,
+  })
+  @test.assert_eq(input.advance_string("😀\nx\r\n😺\ny").position(), {
+    offset: 10,
+    line: 4,
+    column: 2,
+  })
+}
+
+///|
+test "sep_by returns independent empty arrays" {
+  let parser : Parser[Input, Array[Char]] = char('a').sep_by(char(','))
+  let input = Input::new("")
+  let first = parser.parse(input).unwrap()
+  let second = parser.parse(input).unwrap()
+  first.push('x')
+  @test.assert_eq(second, [])
+  @test.assert_eq(parser.parse(input), Ok([]))
+}
+
+///|
+test "merging nested errors keeps each expected label once" {
+  let input = Input::new("")
+  let a = ParseError::new(input, "a")
+  let b = ParseError::new(input, "b")
+  let c = ParseError::new(input, "c")
+  @test.assert_eq(a.merge(a.merge(b)).expected(), ["a", "b"])
+  @test.assert_eq(a.merge(b).merge(a.merge(c)).expected(), ["a", "b", "c"])
+  @test.assert_eq(a.merge(b).merge(b.merge(c)).expected(), ["a", "b", "c"])
+  @test.assert_eq(a.merge(a).merge(b).expected(), ["a", "b"])
+}
+
+///|
+test "choice merges errors like or before stopping on commitment" {
+  let first : Parser[Input, Char] = string("#a").then(char('b')).attempt()
+  let input = Input::new("#ax")
+  for
+    (second, expected) in [
+      (char('#').then(char('z')), ["'b'"]),
+      (string("#a").then(char('z')), ["'b'", "'z'"]),
+    ] {
+    let result = choice([first, second, pure('!')]).parse_partial(input)
+    @test.assert_eq(result, first.or(second).or(pure('!')).parse_partial(input))
+    guard result is Err(error) else {
+      @test.fail("expected committed parse error")
+    }
+    @test.assert_eq(error.offset(), 2)
+    @test.assert_eq(error.expected(), expected)
+    @test.assert_eq(error.is_committed(), true)
+  }
+}
+
+///|
+test "parse commits trailing input errors only after consumption" {
+  let input = Input::new("xab").advance('x')
+  for
+    (parser, offset, committed) in [(char('a'), 2, true), (pure('a'), 1, false)] {
+    let result : Result[Char, ParseError] = parser.parse(input)
+    @test.assert_eq(result, parser.skip(eof()).parse(input))
+    guard result is Err(error) else {
+      @test.fail("expected trailing input error")
+    }
+    @test.assert_eq(error.offset(), offset)
+    @test.assert_eq(error.expected(), ["end of input"])
+    @test.assert_eq(error.is_committed(), committed)
+  }
+}
+
+///|
+struct TokenCursor {
+  index : Int
+  source_offset : Int
+}
+
+///|
+impl @talcparsec.Cursor for TokenCursor with fn cursor(self) {
+  self.index
+}
+
+///|
+impl @talcparsec.Cursor for TokenCursor with fn position(self) {
+  { offset: self.source_offset, line: 1, column: self.source_offset + 1, }
+}
+
+///|
+impl @talcparsec.Cursor for TokenCursor with fn is_at_eof(_self) {
+  false
+}
+
+///|
+test "label compares source offsets for token cursors" {
+  let parser : Parser[TokenCursor, Unit] = fail("old")
+  let input : TokenCursor = { index: 0, source_offset: 42, }
+  guard parser.label("new").run(input) is Err(labeled) else {
+    @test.fail("expected failure before token consumption")
+  }
+  @test.assert_eq(labeled.offset(), 42)
+  @test.assert_eq(labeled.expected(), ["new"])
+  @test.assert_eq(labeled.is_committed(), false)
+  let token = @talcparsec.satisfy_input(
+    (input : TokenCursor) => {
+      Some(
+        (
+          (),
+          { index: input.index + 1, source_offset: input.source_offset + 3, },
+        ),
+      )
+    },
+    "token",
+    _ => true,
+  )
+  guard token.then(parser).label("new").run(input) is Err(error) else {
+    @test.fail("expected failure after token consumption")
+  }
+  @test.assert_eq(error.offset(), 45)
+  @test.assert_eq(error.expected(), ["old"])
+  @test.assert_eq(error.is_committed(), true)
+}
+
+///|
+test "character parsing preserves Unicode values and predicate calls" {
+  let seen = []
+  let parser : Parser[Input, Char] = satisfy("emoji", ch => {
+    seen.push(ch)
+    ch == '😀'
+  })
+  let input = Input::new("😀x")
+  let rest = input.advance('😀')
+  @test.assert_eq(input.next(), Some(('😀', rest)))
+  @test.assert_eq(parser.parse_partial(input), Ok(('😀', rest)))
+  guard parser.parse_partial(rest) is Err(error) else {
+    @test.fail("expected rejected character")
+  }
+  @test.assert_eq(error.offset(), 2)
+  @test.assert_eq(error.expected(), ["emoji"])
+  @test.assert_eq(error.is_committed(), false)
+  @test.assert_eq(parser.run(rest.advance('x')) is Err(_), true)
+  @test.assert_eq(seen, ['😀', 'x'])
+  @test.assert_eq(rest.advance('x').next(), None)
+  let mapped : Parser[Input, String] = char('😀').string_map(text => {
+    "[" + text + "]"
+  })
+  @test.assert_eq(mapped.parse(Input::new("😀")), Ok("[😀]"))
+}
+
+///|
+test "skip returns the first value and preserves failure commitment" {
+  let parser : Parser[Input, Char] = char('a').skip(char('b'))
+  @test.assert_eq(parser.parse(Input::new("ab")), Ok('a'))
+  for
+    (parser, source, offset, committed) in [
+      (parser, "ac", 1, true),
+      (parser, "xb", 0, false),
+      (pure('x').skip(char('b')), "a", 0, false),
+    ] {
+    guard parser.parse(Input::new(source)) is Err(error) else {
+      @test.fail("expected skip failure")
+    }
+    @test.assert_eq(error.offset(), offset)
+    @test.assert_eq(error.is_committed(), committed)
+  }
+  @test.assert_eq(
+    parser.attempt().or(char('a').skip(char('c'))).parse(Input::new("ac")),
+    Ok('a'),
+  )
+}
+
+///|
+test "merging errors preserves its inputs and message precedence" {
+  let input = Input::new("")
+  let a = ParseError::new(input, "a")
+  let b = ParseError::new(input, "b")
+  let c = ParseError::new(input, "c")
+  let left = a.merge(b)
+  let right = b.merge(c).with_commit()
+  let merged = left.merge(right)
+  @test.assert_eq(merged.expected(), ["a", "b", "c"])
+  @test.assert_eq(merged.is_committed(), true)
+  @test.assert_eq(left.expected(), ["a", "b"])
+  @test.assert_eq(left.is_committed(), false)
+  @test.assert_eq(right.expected(), ["b", "c"])
+  let message = ParseError::message(input, "first")
+    .merge(a.merge(b))
+    .merge(ParseError::message(input, "second"))
+  @test.assert_eq(message.expected(), ["a", "b"])
+  @test.assert_eq(message.message_text(), "first")
+}
+
+///|
+test "character collection preserves mapped values and repetition failures" {
+  for
+    (parser, source) in [
+      (char('a').map(_ => '😀'), "aa!"),
+      (string("ab").map(_ => 'x'), "ababc"),
+      (char('a').then(char('b')), "abac"),
+      (char('a').then(char('b')).attempt(), "abac"),
+      (pure('x'), ""),
+      (char('a'), ""),
+    ] {
+    let parser : Parser[Input, Char] = parser
+    let input = Input::new(source)
+    @test.assert_eq(
+      many_chars(parser).parse_partial(input),
+      parser.many().map(chars => String::from_array(chars)).parse_partial(input),
+    )
+    @test.assert_eq(
+      many_chars1(parser).parse_partial(input),
+      parser.some().map(chars => String::from_array(chars)).parse_partial(input),
+    )
+  }
+}
+
+///|
+test "bulk scanners preserve Unicode and block boundaries" {
+  @test.assert_eq(Input::new("").line_starts, [0])
+  let skip : Parser[Input, Unit] = @talcparsec.skip_spaces()
+  let controls = String::from_array([11, 12].map(cp => cp.to_char().unwrap()))
+  for length in [0, 1, 7, 8, 9, 15, 16, 17, 31, 32] {
+    let prefix = String::from_array(Array::make(length, ' '))
+    let lines = Input::new(prefix + "\n😀\nx\r\n")
+    @test.assert_eq(lines.line_starts, [0, length + 1, length + 4, length + 7])
+    let whitespace = prefix + "\t\r\n" + controls + "  　"
+    let input = Input::new(whitespace + "😀x")
+    @test.assert_eq(
+      skip.parse_partial(input),
+      Ok(((), input.advance_string(whitespace))),
+    )
+  }
+}
+
+///|
+test "character sets preserve ASCII boundaries and Unicode membership" {
+  let chars = String::from_array(
+      [0, 31, 32, 63, 64, 95, 96, 127].map(cp => cp.to_char().unwrap()),
+    ) +
+    "中😀"
+  let included : Parser[Input, Char] = @talcparsec.one_of(chars)
+  let excluded : Parser[Input, Char] = @talcparsec.none_of(chars)
+  let candidates = [
+    ..Array::makei(128, cp => cp.to_char().unwrap()),
+    '中',
+    '😀',
+    '😺',
+  ]
+  for ch in candidates {
+    let input = Input::new(ch.to_string())
+    if chars.contains_char(ch) {
+      @test.assert_eq(included.parse(input), Ok(ch))
+      @test.assert_eq(excluded.parse(input) is Err(_), true)
+    } else {
+      @test.assert_eq(included.parse(input) is Err(_), true)
+      @test.assert_eq(excluded.parse(input), Ok(ch))
+    }
+  }
+}
+
+///|
+test "many_until preserves committed terminator failures unless attempted" {
+  let body : Parser[Input, Char] = satisfy("character", _ => true)
+  let terminator = char('a').then(char('b'))
+  let input = Input::new("ac")
+  guard body.many_until(terminator).parse(input) is Err(error) else {
+    @test.fail("expected committed terminator failure")
+  }
+  @test.assert_eq(error.offset(), 1)
+  @test.assert_eq(error.is_committed(), true)
+  @test.assert_eq(
+    body.many_until(terminator.attempt()).parse(input),
+    Ok(['a', 'c']),
+  )
 }

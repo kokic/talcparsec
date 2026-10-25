@@ -54,12 +54,10 @@ pub fn[I, T, U, E] ParserRaw::map(
   f : (T) -> U,
 ) -> ParserRaw[I, U, E] {
   ParserRaw::new(input => {
-    self
-    .run(input)
-    .map(result => {
-      let (value, rest) = result
-      (f(value), rest)
-    })
+    match self.run(input) {
+      Ok((value, rest)) => Ok((f(value), rest))
+      Err(error) => Err(error)
+    }
   })
 }
 
@@ -143,7 +141,10 @@ pub fn[I, T, E : Commit + CanMerge] ParserRaw::or(
       Ok(_) as success => success
       Err(first) if Commit::is_committed(first) => Err(first)
       Err(first) =>
-        other.run(input).map_err(second => CanMerge::merge(first, second))
+        match other.run(input) {
+          Ok(_) as success => success
+          Err(second) => Err(CanMerge::merge(first, second))
+        }
     }
   })
 }
@@ -204,14 +205,16 @@ pub fn[I : Cursor, T, E : ParseFailure] ParserRaw::label(
   expected : String,
 ) -> ParserRaw[I, T, E] {
   ParserRaw::new(input => {
-    self
-    .run(input)
-    .map_err(error => {
-      guard Positioned::error_offset(error) == input.cursor() else { error }
-      let labeled = ParseFailure::signal(input, expected)
-      guard Commit::is_committed(error) else { labeled }
-      Commit::mark_committed(labeled)
-    })
+    let error = match self.run(input) {
+      Ok(result) => return Ok(result)
+      Err(error) => error
+    }
+    guard Positioned::error_offset(error) == input.position().offset else {
+      Err(error)
+    }
+    let labeled = ParseFailure::signal(input, expected)
+    guard Commit::is_committed(error) else { Err(labeled) }
+    Err(Commit::mark_committed(labeled))
   })
 }
 
@@ -338,9 +341,10 @@ pub fn[I : Cursor, T, E : Commit + CanMerge + ParseFailure] choice(
         Ok(result) => break Ok(result)
         Err(error) => {
           // Accumulate: merge the latest error into the running combination.
-          let combined = merged.map_or(error, prev => {
-            CanMerge::merge(prev, error)
-          })
+          let combined = match merged {
+            Some(prev) => CanMerge::merge(prev, error)
+            None => error
+          }
           guard !Commit::is_committed(error) else {
             break Err(Commit::mark_committed(combined))
           }
@@ -349,7 +353,10 @@ pub fn[I : Cursor, T, E : Commit + CanMerge + ParseFailure] choice(
         }
       }
     } nobreak {
-      Err(merged.unwrap_or(ParseFailure::message(input, "empty choice")))
+      guard merged is Some(error) else {
+        Err(ParseFailure::message(input, "empty choice"))
+      }
+      Err(error)
     }
   })
 }
